@@ -1,0 +1,3051 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BCR-ABL RQ-PCR 자동 분석 시스템</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --panel: #ffffff;
+    --primary: #dc2626;
+    --primary-dark: #b91c1c;
+    --accent: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --border: #e5e7eb;
+    --row-alt: #fafafa;
+    --pass: #d1fae5;
+    --pass-text: #065f46;
+    --fail: #fee2e2;
+    --fail-text: #991b1b;
+    --warn-bg: #fef3c7;
+    --warn-text: #92400e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', 'Malgun Gothic', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+  }
+  header {
+    background: white;
+    color: var(--text);
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-top-bar {
+    height: 6px;
+    background: #dc2626;
+  }
+  .header-content {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 28px 32px 22px;
+  }
+  .header-eyebrow {
+    color: #dc2626;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+  header h1 {
+    margin: 0 0 10px 0;
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #111;
+    line-height: 1.15;
+  }
+  header h1 .accent { color: #dc2626; }
+  header .sub {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+  @media (max-width: 768px) {
+    header h1 { font-size: 24px; }
+    .header-content { padding: 22px 20px 18px; }
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
+  .panel {
+    background: var(--panel);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+  .panel h2 {
+    margin: 0 0 14px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+  /* Upload */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 32px;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
+    background: #fafbfc;
+  }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--primary);
+    background: #fef2f2;
+  }
+  .upload-zone .icon { font-size: 32px; margin-bottom: 8px; }
+  .upload-zone .hint { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+  .upload-zone .filename { color: var(--primary); font-weight: 600; margin-top: 8px; }
+  /* Settings */
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .form-group input {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    width: 140px;
+  }
+  .form-group input:focus { outline: none; border-color: var(--primary); }
+  .form-group .help { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  /* Buttons */
+  .btn {
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: -0.01em;
+  }
+  .btn:hover { background: #f3f4f6; }
+  .btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+  .btn.primary:hover { background: var(--primary-dark); }
+  .btn.success { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn.success:hover { filter: brightness(0.95); }
+  .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+    background: white;
+    border-radius: 6px 6px 0 0;
+    padding: 0 8px;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 14px 18px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  .tab-content {
+    background: white;
+    padding: 24px;
+    border-radius: 0 0 6px 6px;
+    border: 1px solid var(--border);
+    border-top: none;
+    min-height: 300px;
+  }
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    background: #f3f4f6;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:nth-child(even) td { background: var(--row-alt); }
+  tr:hover td { background: #fef2f2; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.pass { background: var(--pass); color: var(--pass-text); }
+  .badge.fail { background: var(--fail); color: var(--fail-text); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn-text); }
+  .badge.cmr { background: #dbeafe; color: #1e40af; }
+  .badge.mmr { background: #fef3c7; color: #92400e; }
+  .badge.nommr { background: #fee2e2; color: #991b1b; }
+  .row-warn td { background: #fffbeb !important; }
+  .row-fail td { background: #fef2f2 !important; }
+  .empty {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 60px 20px;
+    font-size: 13px;
+  }
+  /* Summary cards */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .stat-card {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border: 1px solid #fecaca;
+    padding: 14px 16px;
+    border-radius: 8px;
+  }
+  .stat-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-card .value { font-size: 22px; font-weight: 700; color: var(--primary); margin-top: 4px; }
+  .stat-card .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  /* Chart */
+  .chart-wrap { position: relative; height: 320px; margin: 12px 0; }
+  /* Footer controls */
+  .controls {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    padding: 16px 0;
+    flex-wrap: wrap;
+  }
+  /* Modal */
+  .modal-back {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-back.show { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 10px;
+    padding: 24px;
+    max-width: 540px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+  .modal h3 { margin-top: 0; }
+  .modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 120px;
+    gap: 8px 12px;
+    align-items: center;
+    margin: 12px 0;
+  }
+  .modal-grid label { font-size: 12px; color: var(--text); }
+  .modal-grid input {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  /* Edit/print 스위치 */
+  .only-print { display: none; }
+  /* WorkList 클립보드 복사 가능 셀 */
+  .copyable {
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 3px;
+    position: relative;
+  }
+  .copyable:hover {
+    background: #fef2f2 !important;
+    outline: 1px dashed var(--primary);
+  }
+  .copyable.copied {
+    background: #d1fae5 !important;
+    outline: 1px solid var(--accent);
+  }
+  .copyable.copied::after {
+    content: '✓ 복사됨';
+    position: absolute;
+    top: -22px;
+    right: 0;
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .copy-all-btn {
+    font-size: 10px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-muted);
+  }
+  .copy-all-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+  .copy-all-btn.copied {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  /* Print */
+  @media print {
+    .no-print { display: none !important; }
+    .only-print { display: block !important; }
+    header, .controls, .panel:not(.print-only), .tabs, #fileInput { display: none !important; }
+    .tab-content { border: none; padding: 0; }
+    body { background: white; font-size: 11px; }
+    .container { max-width: none; padding: 12px; }
+    .tab-pane { display: none !important; }
+    .tab-pane.print-show { display: block !important; }
+    table { font-size: 11px; }
+    th { background: #e5e7eb !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .report-title { display: block; text-align: center; font-size: 16px; font-weight: 700; margin: 8px 0 16px 0; }
+  }
+  .report-title { display: none; }
+  /* Mono */
+  .mono { font-family: 'Consolas', 'Monaco', monospace; font-size: 12px; }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+  .small { font-size: 11px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top-bar"></div>
+  <div class="header-content">
+    <div class="header-eyebrow">BCR-ABL1 RQ-PCR · Molecular Diagnostics</div>
+    <h1>BCR-ABL1 RQ-PCR <span class="accent">자동 분석</span> 시스템</h1>
+    <div class="sub">Real-Time PCR 결과 자동 분석 및 QC 판정 · 씨젠의료재단 분자유전검사실</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Upload Panel -->
+  <div class="panel">
+    <h2>📂 파일 업로드 및 설정</h2>
+    <div class="row" style="align-items: stretch;">
+      <div class="upload-zone" id="dropZone" style="flex: 2; min-width: 320px;">
+        <div class="icon">📊</div>
+        <div><strong>엑셀 파일을 드래그하여 놓으세요</strong></div>
+        <div class="hint">XLS / XLSX 형식 지원 (ABI 7500 export)</div>
+        <div class="filename" id="fileLabel"></div>
+        <input type="file" id="fileInput" accept=".xls,.xlsx" style="display:none" />
+      </div>
+      <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 12px; justify-content: center;">
+        <div class="form-group">
+          <label>⚙️ IS-CAL 보정값 (CF 분자)</label>
+          <input type="number" id="cfNumerator" value="0.101" step="0.001" min="0" />
+          <div class="help">IS-NCN 계산에 사용되는 보정 상수 (6개월 주기 재평가)</div>
+          <div id="calibStatusInline" class="help" style="margin-top:4px;"></div>
+        </div>
+        <button class="btn" onclick="openSettings()">🔧 QC/MR 기준값 설정</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Standard Curve Capture Panel -->
+  <div class="panel">
+    <h2>📈 표준곡선 캡쳐 이미지 (시약 SW)</h2>
+    <div class="row" style="align-items: stretch;">
+      <div class="upload-zone" id="curveDropZone" style="flex: 1; min-width: 320px;">
+        <div class="icon">🖼️</div>
+        <div><strong>이미지를 드래그하거나 붙여넣기 (Ctrl+V)</strong></div>
+        <div class="hint">시약 SW의 Standard Curve 캡쳐 — Slope/Y-Inter/R²/Eff% 자동 인식</div>
+        <input type="file" id="curveImageInput" accept="image/*" style="display:none" />
+      </div>
+      <div style="flex: 1; min-width: 320px; display: flex; flex-direction: column; gap: 8px;">
+        <div id="curveImagePreview" style="display:none; position:relative; flex: 1; min-height: 80px; max-height: 240px; overflow: hidden; border: 1px solid var(--border); border-radius: 6px; user-select:none;">
+          <img id="curveImg" draggable="false" style="width: 100%; height: 100%; object-fit: contain; background: #fafbfc; pointer-events:none;" />
+          <div id="cropOverlay" style="position:absolute; border:2px dashed var(--primary); background:rgba(37,99,235,0.12); display:none; pointer-events:none;"></div>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn primary" id="ocrBtn" onclick="runCurveOCR()" disabled>🔍 자동 인식 실행</button>
+          <button class="btn" id="cropClearBtn" onclick="clearCrop()" style="display:none;">선택영역 해제</button>
+          <button class="btn" onclick="clearCurveImage()">지우기</button>
+        </div>
+        <div class="small" style="color:var(--text-muted); line-height:1.5;">
+          <strong>인식 정확도 향상 팁</strong>
+          <ol style="margin: 4px 0 0 16px; padding: 0;">
+            <li>가능하면 <strong>범례 부분만</strong> 캡쳐 (Slope/Y-Inter/R²/Eff% 한 줄씩 보이게)</li>
+            <li>인식 실패 시 <strong>이미지에서 범례 영역을 마우스로 드래그</strong>해 선택 후 다시 실행</li>
+            <li>그래도 빈 칸은 <strong>오른쪽 입력 필드에 직접 입력</strong> 가능</li>
+          </ol>
+        </div>
+        <div id="ocrStatus" class="small"></div>
+      </div>
+    </div>
+    <div id="swCurveValues" style="margin-top: 12px;"></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="qc">✅ QC 결과</button>
+    <button class="tab" data-tab="report">📄 검사결과 보고</button>
+    <button class="tab" data-tab="worklist">📋 Work List</button>
+    <button class="tab" data-tab="raw">📋 원시 데이터</button>
+    <button class="tab" data-tab="summary">📊 요약</button>
+  </div>
+
+  <div class="tab-content">
+    <div class="report-title">BCR-ABL1 RQ-PCR 검사 결과 보고서</div>
+
+    <div class="tab-pane" id="tab-qc" style="display:block">
+      <div id="qcContent"><div class="empty">엑셀 파일을 업로드하면 QC 결과가 표시됩니다.</div></div>
+    </div>
+
+    <div class="tab-pane" id="tab-report" style="display:none">
+      <div id="reportContent"><div class="empty">검사결과 보고서가 여기에 표시됩니다.</div></div>
+    </div>
+
+    <div class="tab-pane" id="tab-worklist" style="display:none">
+      <div id="worklistContent"><div class="empty">Work List 미리보기가 여기에 표시됩니다.</div></div>
+    </div>
+
+    <div class="tab-pane" id="tab-raw" style="display:none">
+      <div id="rawContent"><div class="empty">원시 데이터가 여기에 표시됩니다.</div></div>
+    </div>
+
+    <div class="tab-pane" id="tab-summary" style="display:none">
+      <div id="summaryContent"><div class="empty">요약 정보가 여기에 표시됩니다.</div></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" onclick="printReport()">🖨️ 인쇄</button>
+    <button class="btn danger" onclick="resetAll()">🔄 초기화</button>
+    <button class="btn success" onclick="downloadExcel()">⬇️ Excel 다운로드</button>
+  </div>
+
+  <div class="small" style="text-align:center; padding: 12px;">
+    🔒 모든 데이터는 브라우저 내에서만 처리됩니다 · 외부 서버로 전송되지 않습니다
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-back" id="settingsModal">
+  <div class="modal">
+    <h3>🔧 QC / MR 기준값 설정</h3>
+    <p class="small">의료기관 SOP에 맞춰 임계치를 조정하세요. 변경값은 브라우저에 저장됩니다.</p>
+    <div class="modal-grid">
+      <label>표준곡선 R² 최소</label><input type="number" id="setR2" step="0.001" />
+      <label>표준곡선 R² 이상적</label><input type="number" id="setR2Better" step="0.001" />
+      <label>Slope 하한</label><input type="number" id="setSlopeMin" step="0.1" />
+      <label>Slope 상한</label><input type="number" id="setSlopeMax" step="0.1" />
+      <label>Ct SD 임계 (Ct≤기준)</label><input type="number" id="setCtSdLow" step="0.1" />
+      <label>Ct SD 임계 (Ct&gt;기준)</label><input type="number" id="setCtSdHigh" step="0.1" />
+      <label>Ct SD 분기 Ct값</label><input type="number" id="setCtSdThr" step="0.5" />
+      <label>NTC Ct 최소</label><input type="number" id="setNtcCt" step="0.1" />
+      <label>ABL 절대량 최소 (copies)</label><input type="number" id="setAblMin" step="1000" />
+      <label>BCR-ABL LOD (copies)</label><input type="number" id="setLod" step="0.1" />
+      <label>NCN 검출한계 (%)</label><input type="number" id="setNcnLod" step="0.0001" />
+      <label>CMR/MMR 컷오프 (IS-NCN %)</label><input type="number" id="setCmrCut" step="0.001" />
+      <label>MMR/No MMR 컷오프 (IS-NCN %)</label><input type="number" id="setMmrCut" step="0.01" />
+      <label>IS-CAL NCN 하한</label><input type="number" id="setIsCalMin" step="0.01" />
+      <label>IS-CAL NCN 상한</label><input type="number" id="setIsCalMax" step="0.01" />
+      <label>HC IS-NCN 최소</label><input type="number" id="setHcMin" step="0.01" />
+      <label>AMR IS-NCN 하한</label><input type="number" id="setAmrMin" step="0.0001" />
+      <label>AMR IS-NCN 상한</label><input type="number" id="setAmrMax" step="0.0001" />
+    </div>
+    <div class="small" style="background:#fef3c7; padding:8px 10px; border-radius:6px; margin-top:8px;">
+      💡 AMR(Analytical Measuring Range)은 주기적으로 재평가 후 수정합니다.
+    </div>
+
+    <h3 style="font-size:14px; margin-top:16px;">📅 CF분자 / AMR 재평가 관리</h3>
+    <div class="small" style="margin-bottom:8px;">검사 담당자가 6개월 주기로 재평가 후 변경합니다. 아래 입력 후 [저장]을 누르면 이력에 기록됩니다.</div>
+    <div class="modal-grid">
+      <label>변경일자</label><input type="date" id="setCalibChangedAt" />
+      <label>변경자 (검사 담당자)</label><input type="text" id="setCalibChangedBy" placeholder="이름" style="width:auto;" />
+    </div>
+    <div id="calibStatusModal" class="small" style="margin-top:6px; padding:8px 10px; border-radius:6px;"></div>
+
+    <h4 style="font-size:13px; margin: 14px 0 6px 0; display:flex; justify-content:space-between; align-items:center;">
+      변경 이력
+      <button type="button" class="btn" style="font-size:11px; padding:3px 8px;" onclick="addCalibFromModal()">＋ 현재 입력값 이력 추가</button>
+    </h4>
+    <div id="calibHistory" style="font-size:11px;"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="btn" onclick="resetSettings()">기본값 복원</button>
+      <button class="btn primary" onclick="saveSettings()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 기본 설정값 (의료기관 SOP에 맞게 조정 가능)
+// ============================================================
+const DEFAULT_SETTINGS = {
+  r2Min: 0.95,           // SOP: ≥0.95 (better if ≥0.98)
+  r2Better: 0.98,
+  slopeMin: -3.9,        // SOP: -3.0 ~ -3.9
+  slopeMax: -3.0,
+  effMin: 90,
+  effMax: 110,
+  ctSdHigh: 2.0,         // mean Ct >36 일때 SD ≤ 2
+  ctSdLow: 1.5,          // mean Ct ≤36 일때 SD ≤ 1.5
+  ctSdThreshold: 36,     // mean Ct 분기점
+  ntcCtMin: 38,
+  ablMin: 10000,         // SOP: ABL_CN > 10,000
+  bcrLod: 3,
+  ncnLod: 0.0026,
+  cmrCutoff: 0.01,
+  mmrCutoff: 0.1,
+  isCalNcnMin: 0.05,     // SOP: IS-CAL NCN 0.05~0.3
+  isCalNcnMax: 0.3,
+  hcIsNcnMin: 0.15,      // SOP: HC IS-NCN ≥ 0.15
+  sp1Required: true,     // SP1 (BCR-ABL 10 copies) must be detected
+  amrMin: 0.0023,        // AMR (Analytical Measuring Range) IS-NCN 하한
+  amrMax: 42.3600,       // AMR IS-NCN 상한
+};
+let SETTINGS = loadSettings();
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('bcrabl_settings') || '{}');
+    return { ...DEFAULT_SETTINGS, ...s };
+  } catch { return { ...DEFAULT_SETTINGS }; }
+}
+
+// CF분자/AMR 변경 이력: 누적 기록 + 편집/삭제
+// localStorage key: bcrabl_calib_history (array of entries)
+// schema: { id, ts, changedAt, changedBy, cfNumerator, amrMin, amrMax }
+function loadCalibHistory() {
+  try {
+    let arr = JSON.parse(localStorage.getItem('bcrabl_calib_history') || '[]');
+    // 기존 단일 메타 데이터 마이그레이션
+    if (arr.length === 0) {
+      const old = JSON.parse(localStorage.getItem('bcrabl_calib_meta') || '{}');
+      if (old.changedAt || old.changedBy) {
+        arr = [{
+          id: Date.now(),
+          ts: Date.now(),
+          changedAt: old.changedAt || null,
+          changedBy: old.changedBy || null,
+          cfNumerator: SETTINGS?.cfNumerator ?? 0.101,
+          amrMin: SETTINGS?.amrMin ?? 0.0023,
+          amrMax: SETTINGS?.amrMax ?? 42.36,
+        }];
+        localStorage.setItem('bcrabl_calib_history', JSON.stringify(arr));
+      }
+    }
+    return arr;
+  } catch { return []; }
+}
+function saveCalibHistory(arr) {
+  localStorage.setItem('bcrabl_calib_history', JSON.stringify(arr));
+}
+// 가장 최근(변경일 기준) 엔트리 — 현재 적용된 값
+function loadCalibMeta() {
+  const arr = loadCalibHistory();
+  if (!arr.length) return {};
+  const sorted = [...arr].sort((a, b) =>
+    (a.changedAt || '').localeCompare(b.changedAt || '') || (a.ts - b.ts)
+  );
+  return sorted[sorted.length - 1];
+}
+function appendCalibEntry(entry) {
+  const arr = loadCalibHistory();
+  arr.push({ id: Date.now() + Math.random(), ts: Date.now(), ...entry });
+  saveCalibHistory(arr);
+}
+function updateCalibEntry(id, patch) {
+  const arr = loadCalibHistory();
+  const idx = arr.findIndex(e => e.id === id);
+  if (idx >= 0) {
+    arr[idx] = { ...arr[idx], ...patch };
+    saveCalibHistory(arr);
+  }
+}
+function deleteCalibEntry(id) {
+  const arr = loadCalibHistory().filter(e => e.id !== id);
+  saveCalibHistory(arr);
+}
+// 6개월 = 약 183일
+const CALIB_VALID_DAYS = 183;
+function calibDaysSince(changedAt) {
+  if (!changedAt) return null;
+  const ms = Date.now() - new Date(changedAt).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+function calibStatus() {
+  const meta = loadCalibMeta();
+  const days = calibDaysSince(meta.changedAt);
+  if (days == null) return { state: 'unset', label: '⚠ 마지막 변경일 미지정 — 설정에서 입력하세요' };
+  const remaining = CALIB_VALID_DAYS - days;
+  if (remaining < 0) return {
+    state: 'expired',
+    label: `⛔ 6개월 경과 (${days}일 전 변경) — 재평가 필요`,
+    meta
+  };
+  if (remaining < 30) return {
+    state: 'soon',
+    label: `⚠ ${remaining}일 후 만료 (${meta.changedAt} 변경) — 재평가 준비`,
+    meta
+  };
+  return {
+    state: 'ok',
+    label: `✓ 유효 (${meta.changedAt} 변경, ${remaining}일 남음)`,
+    meta
+  };
+}
+function saveSettings() {
+  SETTINGS = {
+    ...DEFAULT_SETTINGS,
+    r2Min: +document.getElementById('setR2').value,
+    r2Better: +document.getElementById('setR2Better').value,
+    slopeMin: +document.getElementById('setSlopeMin').value,
+    slopeMax: +document.getElementById('setSlopeMax').value,
+    ctSdLow: +document.getElementById('setCtSdLow').value,
+    ctSdHigh: +document.getElementById('setCtSdHigh').value,
+    ctSdThreshold: +document.getElementById('setCtSdThr').value,
+    ntcCtMin: +document.getElementById('setNtcCt').value,
+    ablMin: +document.getElementById('setAblMin').value,
+    bcrLod: +document.getElementById('setLod').value,
+    ncnLod: +document.getElementById('setNcnLod').value,
+    cmrCutoff: +document.getElementById('setCmrCut').value,
+    mmrCutoff: +document.getElementById('setMmrCut').value,
+    isCalNcnMin: +document.getElementById('setIsCalMin').value,
+    isCalNcnMax: +document.getElementById('setIsCalMax').value,
+    hcIsNcnMin: +document.getElementById('setHcMin').value,
+    amrMin: +document.getElementById('setAmrMin').value,
+    amrMax: +document.getElementById('setAmrMax').value,
+  };
+  localStorage.setItem('bcrabl_settings', JSON.stringify(SETTINGS));
+  // 캘리브레이션 이력: 입력값이 최신과 다를 때만 새 이력 추가
+  const changedAt = document.getElementById('setCalibChangedAt').value;
+  const changedBy = document.getElementById('setCalibChangedBy').value.trim();
+  const cfNum = +document.getElementById('cfNumerator').value || 0.101;
+  const latest = loadCalibMeta();
+  const isDifferent = (changedAt || changedBy) && (
+    (changedAt || null) !== (latest.changedAt || null) ||
+    (changedBy || null) !== (latest.changedBy || null) ||
+    cfNum !== latest.cfNumerator ||
+    SETTINGS.amrMin !== latest.amrMin ||
+    SETTINGS.amrMax !== latest.amrMax
+  );
+  if (isDifferent) {
+    appendCalibEntry({
+      changedAt: changedAt || null,
+      changedBy: changedBy || null,
+      cfNumerator: cfNum,
+      amrMin: SETTINGS.amrMin,
+      amrMax: SETTINGS.amrMax,
+    });
+  }
+  renderCalibStatus();
+  renderCalibHistory();
+  closeSettings();
+  if (STATE.parsed) analyze();
+}
+function resetSettings() {
+  SETTINGS = { ...DEFAULT_SETTINGS };
+  localStorage.removeItem('bcrabl_settings');
+  fillSettingsForm();
+}
+function fillSettingsForm() {
+  document.getElementById('setR2').value = SETTINGS.r2Min;
+  document.getElementById('setR2Better').value = SETTINGS.r2Better;
+  document.getElementById('setSlopeMin').value = SETTINGS.slopeMin;
+  document.getElementById('setSlopeMax').value = SETTINGS.slopeMax;
+  document.getElementById('setCtSdLow').value = SETTINGS.ctSdLow;
+  document.getElementById('setCtSdHigh').value = SETTINGS.ctSdHigh;
+  document.getElementById('setCtSdThr').value = SETTINGS.ctSdThreshold;
+  document.getElementById('setNtcCt').value = SETTINGS.ntcCtMin;
+  document.getElementById('setAblMin').value = SETTINGS.ablMin;
+  document.getElementById('setLod').value = SETTINGS.bcrLod;
+  document.getElementById('setNcnLod').value = SETTINGS.ncnLod;
+  document.getElementById('setCmrCut').value = SETTINGS.cmrCutoff;
+  document.getElementById('setMmrCut').value = SETTINGS.mmrCutoff;
+  document.getElementById('setIsCalMin').value = SETTINGS.isCalNcnMin;
+  document.getElementById('setIsCalMax').value = SETTINGS.isCalNcnMax;
+  document.getElementById('setHcMin').value = SETTINGS.hcIsNcnMin;
+  document.getElementById('setAmrMin').value = SETTINGS.amrMin;
+  document.getElementById('setAmrMax').value = SETTINGS.amrMax;
+  // 캘리브레이션 메타 (가장 최근 이력 표시)
+  const meta = loadCalibMeta();
+  document.getElementById('setCalibChangedAt').value = meta.changedAt || '';
+  document.getElementById('setCalibChangedBy').value = meta.changedBy || '';
+  renderCalibHistory();
+  renderCalibStatus();
+}
+
+function renderCalibHistory() {
+  const container = document.getElementById('calibHistory');
+  if (!container) return;
+  const arr = [...loadCalibHistory()].sort((a, b) =>
+    (b.changedAt || '').localeCompare(a.changedAt || '') || (b.ts - a.ts)
+  );
+  if (arr.length === 0) {
+    container.innerHTML = '<div class="small" style="color:var(--text-muted); padding:8px;">이력 없음 — 위 입력 후 [현재 입력값 이력 추가] 또는 [저장]</div>';
+    return;
+  }
+  let html = `<div style="overflow-x:auto;"><table style="width:100%; font-size:11px; border-collapse:collapse;">
+    <thead><tr style="background:#f3f4f6;">
+      <th style="padding:6px 8px; text-align:left;">변경일자</th>
+      <th style="padding:6px 8px; text-align:left;">변경자</th>
+      <th style="padding:6px 8px; text-align:right;">CF분자</th>
+      <th style="padding:6px 8px; text-align:right;">AMR하한</th>
+      <th style="padding:6px 8px; text-align:right;">AMR상한</th>
+      <th style="padding:6px 8px; text-align:center;">작업</th>
+    </tr></thead><tbody>`;
+  for (const e of arr) {
+    html += `<tr data-id="${e.id}" style="border-bottom:1px solid var(--border);">
+      <td class="ch-view ch-changedAt" style="padding:6px 8px;">${e.changedAt || '-'}</td>
+      <td class="ch-view ch-changedBy" style="padding:6px 8px;">${e.changedBy || '-'}</td>
+      <td class="ch-view ch-cfNumerator mono" style="padding:6px 8px; text-align:right;">${e.cfNumerator ?? '-'}</td>
+      <td class="ch-view ch-amrMin mono" style="padding:6px 8px; text-align:right;">${e.amrMin ?? '-'}</td>
+      <td class="ch-view ch-amrMax mono" style="padding:6px 8px; text-align:right;">${e.amrMax ?? '-'}</td>
+      <td class="ch-view" style="padding:6px 8px; text-align:center; white-space:nowrap;">
+        <button type="button" class="btn" style="font-size:10px; padding:2px 6px;" onclick="editCalibRow('${e.id}')">편집</button>
+        <button type="button" class="btn danger" style="font-size:10px; padding:2px 6px;" onclick="deleteCalibRow('${e.id}')">삭제</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+// 행을 편집 모드로 전환
+function editCalibRow(id) {
+  const e = loadCalibHistory().find(x => String(x.id) === String(id));
+  if (!e) return;
+  const tr = document.querySelector(`#calibHistory tr[data-id="${e.id}"]`);
+  if (!tr) return;
+  tr.innerHTML = `
+    <td style="padding:4px;"><input type="date" data-k="changedAt" value="${e.changedAt || ''}" style="width:100%; padding:3px 5px; font-size:11px;" /></td>
+    <td style="padding:4px;"><input type="text" data-k="changedBy" value="${e.changedBy || ''}" style="width:100%; padding:3px 5px; font-size:11px;" /></td>
+    <td style="padding:4px;"><input type="number" step="0.001" data-k="cfNumerator" value="${e.cfNumerator ?? ''}" style="width:100%; padding:3px 5px; font-size:11px; text-align:right;" /></td>
+    <td style="padding:4px;"><input type="number" step="0.0001" data-k="amrMin" value="${e.amrMin ?? ''}" style="width:100%; padding:3px 5px; font-size:11px; text-align:right;" /></td>
+    <td style="padding:4px;"><input type="number" step="0.0001" data-k="amrMax" value="${e.amrMax ?? ''}" style="width:100%; padding:3px 5px; font-size:11px; text-align:right;" /></td>
+    <td style="padding:4px; text-align:center; white-space:nowrap;">
+      <button type="button" class="btn primary" style="font-size:10px; padding:2px 6px;" onclick="saveCalibRow('${e.id}')">저장</button>
+      <button type="button" class="btn" style="font-size:10px; padding:2px 6px;" onclick="renderCalibHistory()">취소</button>
+    </td>`;
+}
+
+function saveCalibRow(id) {
+  const tr = document.querySelector(`#calibHistory tr[data-id="${id}"]`);
+  if (!tr) return;
+  const patch = {};
+  tr.querySelectorAll('input[data-k]').forEach(inp => {
+    const k = inp.dataset.k;
+    let v = inp.value;
+    if (['cfNumerator','amrMin','amrMax'].includes(k)) v = v === '' ? null : parseFloat(v);
+    if (['changedAt','changedBy'].includes(k)) v = v.trim() || null;
+    patch[k] = v;
+  });
+  updateCalibEntry(parseFloat(id), patch);
+  applyLatestCalibToSettings();
+  renderCalibHistory();
+  renderCalibStatus();
+}
+
+function deleteCalibRow(id) {
+  if (!confirm('이 변경 이력을 삭제하시겠습니까?')) return;
+  deleteCalibEntry(parseFloat(id));
+  applyLatestCalibToSettings();
+  renderCalibHistory();
+  renderCalibStatus();
+}
+
+// 모달 상단 입력값을 이력에 추가
+function addCalibFromModal() {
+  const changedAt = document.getElementById('setCalibChangedAt').value;
+  const changedBy = document.getElementById('setCalibChangedBy').value.trim();
+  if (!changedAt && !changedBy) {
+    alert('변경일자 또는 변경자를 먼저 입력해주세요.');
+    return;
+  }
+  appendCalibEntry({
+    changedAt: changedAt || null,
+    changedBy: changedBy || null,
+    cfNumerator: +document.getElementById('cfNumerator').value || 0.101,
+    amrMin: +document.getElementById('setAmrMin').value || SETTINGS.amrMin,
+    amrMax: +document.getElementById('setAmrMax').value || SETTINGS.amrMax,
+  });
+  applyLatestCalibToSettings();
+  renderCalibHistory();
+  renderCalibStatus();
+}
+
+// 가장 최근 이력의 CF/AMR 값을 현재 SETTINGS와 입력란에 적용
+function applyLatestCalibToSettings() {
+  const meta = loadCalibMeta();
+  if (meta.cfNumerator != null) {
+    STATE.cfNumerator = meta.cfNumerator;
+    const cfEl = document.getElementById('cfNumerator');
+    if (cfEl) cfEl.value = meta.cfNumerator;
+  }
+  if (meta.amrMin != null) SETTINGS.amrMin = meta.amrMin;
+  if (meta.amrMax != null) SETTINGS.amrMax = meta.amrMax;
+  if (meta.amrMin != null || meta.amrMax != null) {
+    localStorage.setItem('bcrabl_settings', JSON.stringify(SETTINGS));
+    const amrMinEl = document.getElementById('setAmrMin');
+    const amrMaxEl = document.getElementById('setAmrMax');
+    if (amrMinEl && meta.amrMin != null) amrMinEl.value = meta.amrMin;
+    if (amrMaxEl && meta.amrMax != null) amrMaxEl.value = meta.amrMax;
+  }
+  if (STATE.parsed) analyze();
+}
+
+function renderCalibStatus() {
+  const status = calibStatus();
+  const inline = document.getElementById('calibStatusInline');
+  const modal = document.getElementById('calibStatusModal');
+  const colors = {
+    unset:   { bg: '#fef3c7', fg: '#92400e' },
+    expired: { bg: '#fee2e2', fg: '#991b1b' },
+    soon:    { bg: '#fef3c7', fg: '#92400e' },
+    ok:      { bg: '#d1fae5', fg: '#065f46' },
+  }[status.state];
+  if (inline) {
+    inline.textContent = status.label;
+    inline.style.color = colors.fg;
+    inline.style.fontWeight = status.state === 'ok' ? '400' : '600';
+  }
+  if (modal) {
+    modal.textContent = status.label;
+    modal.style.background = colors.bg;
+    modal.style.color = colors.fg;
+  }
+}
+function openSettings() {
+  fillSettingsForm();
+  document.getElementById('settingsModal').classList.add('show');
+}
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('show');
+}
+document.getElementById('settingsModal').addEventListener('click', (e) => {
+  if (e.target.id === 'settingsModal') closeSettings();
+});
+
+// ============================================================
+// 상태
+// ============================================================
+const STATE = {
+  fileName: null,
+  rawRows: null,    // 파싱된 raw row 객체 배열
+  metadata: null,   // 장비 정보 (1~7행)
+  parsed: null,     // { samples, standards, ntcs, qc, curve }
+  cfNumerator: 0.101,
+  cfApplied: null,  // 실제 적용된 CF
+  prevStudy: {},    // sampleName -> 'Previous study' 메모 (LIS 입력용)
+  curveImage: null, // dataURL — 업로드한 표준곡선 캡쳐 이미지
+  curveCropRect: null, // {tx,ty,bx,by} (0~1 비율) — 사용자가 선택한 범례 영역
+  swCurve: {        // SW 캡쳐에서 OCR/수동 입력된 값 (있으면 QC에 우선 사용)
+    'BCR-ABL': { slope: null, yInter: null, r2: null, eff: null },
+    'ABL':     { slope: null, yInter: null, r2: null, eff: null },
+  },
+};
+function setPrevStudy(name, value) {
+  STATE.prevStudy[name] = value;
+}
+
+// ============================================================
+// 파일 업로드 핸들링
+// ============================================================
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+document.getElementById('cfNumerator').addEventListener('input', (e) => {
+  STATE.cfNumerator = +e.target.value || 0.101;
+  if (STATE.parsed) analyze();
+});
+
+function handleFile(file) {
+  if (!/\.xlsx?$/i.test(file.name)) {
+    alert('XLS 또는 XLSX 형식의 엑셀 파일만 업로드할 수 있습니다.');
+    return;
+  }
+  STATE.fileName = file.name;
+  document.getElementById('fileLabel').textContent = '📎 ' + file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      parseWorkbook(wb);
+      analyze();
+    } catch (err) {
+      console.error(err);
+      alert('파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ============================================================
+// 표준곡선 이미지 — 업로드 / 붙여넣기 / 드래그앤드롭
+// ============================================================
+const curveDropZone = document.getElementById('curveDropZone');
+const curveImageInput = document.getElementById('curveImageInput');
+curveDropZone.addEventListener('click', () => curveImageInput.click());
+curveDropZone.addEventListener('dragover', (e) => { e.preventDefault(); curveDropZone.classList.add('dragover'); });
+curveDropZone.addEventListener('dragleave', () => curveDropZone.classList.remove('dragover'));
+curveDropZone.addEventListener('drop', (e) => {
+  e.preventDefault(); curveDropZone.classList.remove('dragover');
+  const f = [...e.dataTransfer.files].find(x => x.type.startsWith('image/'));
+  if (f) loadCurveImage(f);
+});
+curveImageInput.addEventListener('change', (e) => {
+  if (e.target.files[0]) loadCurveImage(e.target.files[0]);
+});
+// 클립보드 붙여넣기 (Ctrl+V)
+window.addEventListener('paste', (e) => {
+  const items = e.clipboardData?.items || [];
+  for (const it of items) {
+    if (it.type.startsWith('image/')) {
+      const f = it.getAsFile();
+      if (f) { loadCurveImage(f); e.preventDefault(); break; }
+    }
+  }
+});
+
+function loadCurveImage(file) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    STATE.curveImage = ev.target.result;
+    STATE.curveCropRect = null;
+    document.getElementById('curveImg').src = ev.target.result;
+    document.getElementById('curveImagePreview').style.display = 'block';
+    document.getElementById('ocrBtn').disabled = false;
+    document.getElementById('cropOverlay').style.display = 'none';
+    document.getElementById('cropClearBtn').style.display = 'none';
+    document.getElementById('ocrStatus').textContent = '준비 완료 — [자동 인식 실행]을 누르세요.';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearCrop() {
+  STATE.curveCropRect = null;
+  document.getElementById('cropOverlay').style.display = 'none';
+  document.getElementById('cropClearBtn').style.display = 'none';
+}
+
+// 미리보기 이미지 위에서 드래그 → crop rect 설정
+(function bindDragCrop() {
+  const preview = document.getElementById('curveImagePreview');
+  const overlay = document.getElementById('cropOverlay');
+  let dragging = false, startX = 0, startY = 0;
+
+  preview.addEventListener('mousedown', (e) => {
+    if (!STATE.curveImage) return;
+    const r = preview.getBoundingClientRect();
+    startX = e.clientX - r.left;
+    startY = e.clientY - r.top;
+    dragging = true;
+    overlay.style.left = startX + 'px';
+    overlay.style.top = startY + 'px';
+    overlay.style.width = '0px';
+    overlay.style.height = '0px';
+    overlay.style.display = 'block';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const r = preview.getBoundingClientRect();
+    const x = Math.max(0, Math.min(r.width, e.clientX - r.left));
+    const y = Math.max(0, Math.min(r.height, e.clientY - r.top));
+    const left = Math.min(startX, x), top = Math.min(startY, y);
+    overlay.style.left = left + 'px';
+    overlay.style.top = top + 'px';
+    overlay.style.width = Math.abs(x - startX) + 'px';
+    overlay.style.height = Math.abs(y - startY) + 'px';
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const r = preview.getBoundingClientRect();
+    const ow = parseFloat(overlay.style.width);
+    const oh = parseFloat(overlay.style.height);
+    if (ow < 10 || oh < 10) {
+      overlay.style.display = 'none';
+      STATE.curveCropRect = null;
+      document.getElementById('cropClearBtn').style.display = 'none';
+      return;
+    }
+    // 미리보기 박스 좌표 → 이미지 좌표 (object-fit: contain 보정)
+    const img = document.getElementById('curveImg');
+    const natW = img.naturalWidth, natH = img.naturalHeight;
+    const boxW = r.width, boxH = r.height;
+    const ratio = Math.min(boxW / natW, boxH / natH);
+    const dispW = natW * ratio, dispH = natH * ratio;
+    const padX = (boxW - dispW) / 2;
+    const padY = (boxH - dispH) / 2;
+    const ol = parseFloat(overlay.style.left);
+    const ot = parseFloat(overlay.style.top);
+    const tx = (ol - padX) / dispW;
+    const ty = (ot - padY) / dispH;
+    const bx = (ol - padX + ow) / dispW;
+    const by = (ot - padY + oh) / dispH;
+    STATE.curveCropRect = {
+      tx: Math.max(0, Math.min(1, tx)),
+      ty: Math.max(0, Math.min(1, ty)),
+      bx: Math.max(0, Math.min(1, bx)),
+      by: Math.max(0, Math.min(1, by)),
+    };
+    document.getElementById('cropClearBtn').style.display = 'inline-flex';
+    document.getElementById('ocrStatus').textContent = '✂️ 영역 선택됨 — [자동 인식 실행]을 누르세요.';
+  });
+})();
+
+function clearCurveImage() {
+  STATE.curveImage = null;
+  STATE.curveCropRect = null;
+  STATE.swCurve = {
+    'BCR-ABL': { slope: null, yInter: null, r2: null, eff: null },
+    'ABL':     { slope: null, yInter: null, r2: null, eff: null },
+  };
+  document.getElementById('curveImg').src = '';
+  document.getElementById('curveImagePreview').style.display = 'none';
+  document.getElementById('ocrBtn').disabled = true;
+  document.getElementById('ocrStatus').textContent = '';
+  document.getElementById('swCurveValues').innerHTML = '';
+  document.getElementById('curveImageInput').value = '';
+  document.getElementById('cropOverlay').style.display = 'none';
+  document.getElementById('cropClearBtn').style.display = 'none';
+  if (STATE.parsed) analyze();
+}
+
+// 이미지 전처리: 업스케일 + 그레이스케일 + 이진화. 옵션으로 cropY (상단 비율) 적용
+async function preprocessImage(dataUrl, scale, cropTopRatio = 0, cropBottomRatio = 0) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const sx = 0;
+      const sy = Math.floor(img.height * cropTopRatio);
+      const sw = img.width;
+      const sh = Math.floor(img.height * (1 - cropTopRatio - cropBottomRatio));
+      const canvas = document.createElement('canvas');
+      canvas.width = sw * scale;
+      canvas.height = sh * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      // 그레이스케일 + 이진화
+      const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+        const v = g < 140 ? 0 : 255;
+        d[i] = d[i+1] = d[i+2] = v;
+      }
+      ctx.putImageData(id, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// Tesseract worker — 한 번만 만들어 재사용
+let _ocrWorker = null;
+async function getOcrWorker(status) {
+  if (_ocrWorker) return _ocrWorker;
+  status.textContent = '⏳ OCR 엔진 초기화 중... (첫 실행 시 1~2분 소요)';
+  const worker = await Tesseract.createWorker('eng', 1, {
+    logger: m => {
+      if (m.status === 'recognizing text') return;
+      status.textContent = '⏳ ' + (m.status || 'loading');
+    }
+  });
+  await worker.setParameters({
+    tessedit_pageseg_mode: '6',  // single block of text
+    tessedit_char_whitelist: 'TargetSlopYInerEffR²2BCAabcdefghijklmnopqrstuvwxyz%:.,-_0123456789 ',
+    preserve_interword_spaces: '1',
+  });
+  _ocrWorker = worker;
+  return worker;
+}
+
+async function ocrOnce(dataUrl, status, label) {
+  const worker = await getOcrWorker(status);
+  status.textContent = `🔍 ${label} 인식 중...`;
+  const { data } = await worker.recognize(dataUrl);
+  return data.text;
+}
+
+// 두 결과 병합: 둘 다 값이 있으면 둘 중 절댓값 유효한 것 (둘 다 null 아닌데 다르면 후자 우선)
+function mergeCurves(a, b) {
+  const out = { 'BCR-ABL': {}, 'ABL': {} };
+  for (const tgt of ['BCR-ABL','ABL']) {
+    for (const k of ['slope','yInter','r2','eff']) {
+      out[tgt][k] = b[tgt][k] != null ? b[tgt][k] : a[tgt][k];
+    }
+  }
+  return out;
+}
+
+async function runCurveOCR() {
+  if (!STATE.curveImage) return;
+  const status = document.getElementById('ocrStatus');
+  const btn = document.getElementById('ocrBtn');
+  btn.disabled = true;
+  try {
+    // 사용자가 영역 선택했으면 그 영역에 다중 임계값 시도, 아니면 다중 crop+임계값 전략
+    const variants = STATE.curveCropRect
+      ? [
+          { rect: STATE.curveCropRect, scale: 5, threshold: 150, label: '선택영역(t=150)' },
+          { rect: STATE.curveCropRect, scale: 5, threshold: 130, label: '선택영역(t=130)' },
+          { rect: STATE.curveCropRect, scale: 5, threshold: 170, label: '선택영역(t=170)' },
+        ]
+      : [
+          { rect: null,                          scale: 2, threshold: 150, label: '전체' },
+          { rect: { tx:0, ty:0.55, bx:1, by:1 }, scale: 4, threshold: 150, label: '하단45%' },
+          { rect: { tx:0, ty:0.7,  bx:1, by:1 }, scale: 6, threshold: 150, label: '하단30%' },
+          { rect: { tx:0, ty:0.8,  bx:1, by:1 }, scale: 7, threshold: 150, label: '하단20%' },
+          { rect: { tx:0, ty:0.7,  bx:1, by:1 }, scale: 6, threshold: 130, label: '하단30%(t=130)' },
+        ];
+
+    let merged = {
+      'BCR-ABL': { slope: null, yInter: null, r2: null, eff: null },
+      'ABL':     { slope: null, yInter: null, r2: null, eff: null },
+    };
+    const debugTexts = [];
+    for (const v of variants) {
+      status.textContent = `⏳ ${v.label} 전처리 중 (${v.scale}x)...`;
+      const processed = await preprocessImageRect(STATE.curveImage, v.scale, v.rect, v.threshold);
+      const text = await ocrOnce(processed, status, v.label);
+      debugTexts.push(`[${v.label}]\n${text}`);
+      const parsed = parseCurveText(text);
+      merged = mergeCurves(merged, parsed);
+      // 모든 값을 다 얻었으면 조기 종료
+      const total = ['BCR-ABL','ABL'].reduce((acc, t) =>
+        acc + ['slope','yInter','r2','eff'].filter(k => merged[t][k] != null).length, 0);
+      if (total >= 8) break;
+    }
+
+    STATE.swCurve = merged;
+    renderSwCurveForm();
+    const got = ['BCR-ABL','ABL'].map(t => {
+      const v = merged[t]; const n = ['slope','yInter','r2','eff'].filter(k => v[k] != null).length;
+      return `${t}: ${n}/4`;
+    }).join(', ');
+    const totalGot = ['BCR-ABL','ABL'].reduce((a,t)=>a+['slope','yInter','r2','eff'].filter(k=>merged[t][k]!=null).length,0);
+    const tip = totalGot < 8
+      ? '<br><span style="color:var(--warn);">⚠ 일부 값을 인식하지 못했습니다. 이미지에서 범례 영역을 드래그로 직접 선택하거나, 빈 칸은 수동 입력하세요.</span>'
+      : '';
+    status.innerHTML = `✓ 인식 완료 (${got})${tip}
+      <details style="margin-top:4px;">
+        <summary style="cursor:pointer; color:var(--text-muted)">OCR 원문 보기</summary>
+        <div style="font-family:monospace; font-size:11px; background:#fafbfc; padding:6px; border-radius:4px; margin-top:4px; max-height:160px; overflow-y:auto; white-space:pre-wrap;">${debugTexts.join('\n\n')}</div>
+      </details>`;
+    if (STATE.parsed) analyze();
+  } catch (err) {
+    console.error(err);
+    status.textContent = '❌ OCR 실패: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 사각형 영역(0~1 비율) crop + scale + 이진화 (threshold 인자로 지정)
+async function preprocessImageRect(dataUrl, scale, rect, threshold = 150) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const r = rect || { tx:0, ty:0, bx:1, by:1 };
+      const sx = Math.floor(img.width * r.tx);
+      const sy = Math.floor(img.height * r.ty);
+      const sw = Math.floor(img.width * (r.bx - r.tx));
+      const sh = Math.floor(img.height * (r.by - r.ty));
+      const canvas = document.createElement('canvas');
+      canvas.width = sw * scale;
+      canvas.height = sh * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+        const v = g < threshold ? 0 : 255;
+        d[i] = d[i+1] = d[i+2] = v;
+      }
+      ctx.putImageData(id, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// OCR 결과 텍스트에서 BCR-ABL/ABL의 Slope/Y-Inter/R²/Eff% 추출
+function parseCurveText(text) {
+  return parseCurveTextV2(text);
+}
+
+// V2: OCR 노이즈에 관대한 파서. Target 키워드 누락/오타 허용, R² 0~1 범위만 인식
+function parseCurveTextV2(text) {
+  let t = String(text || '')
+    .replace(/[│ |_]/g, ' ')
+    .replace(/\s+/g, ' ');
+  t = t.replace(/lnter/gi, 'Inter')
+       .replace(/Slone/gi, 'Slope')
+       .replace(/Y\s*-?\s*lnt/gi, 'Y-Int');
+
+  const result = {
+    'BCR-ABL': { slope: null, yInter: null, r2: null, eff: null },
+    'ABL':     { slope: null, yInter: null, r2: null, eff: null },
+  };
+  const num = '(-?\\d+(?:[.,]\\d+)?)';
+  const parseNum = (s) => s == null ? null : parseFloat(String(s).replace(',', '.'));
+
+  // BCR-ABL / ABL 키워드로 분리 (Target: 누락 허용; OCR이 L을 1로 읽거나 잘리는 경우 허용)
+  const splitRegex = /(BCR[\s\-_·]*AB[L1]?|AB[L1]?)/gi;
+  const tokens = [];
+  let m;
+  while ((m = splitRegex.exec(t)) !== null) {
+    const norm = m[1].toUpperCase().replace(/[\s\-_·]/g, '');
+    const label = norm.startsWith('BCR') ? 'BCR-ABL' : 'ABL';
+    tokens.push({ idx: m.index, label, start: splitRegex.lastIndex });
+  }
+  // 같은 label은 첫 등장만 사용
+  const seen = new Set();
+  const uniq = [];
+  for (const tk of tokens) {
+    if (seen.has(tk.label)) continue;
+    seen.add(tk.label);
+    uniq.push(tk);
+  }
+  for (let i = 0; i < uniq.length; i++) {
+    const seg = t.slice(uniq[i].start, uniq[i+1]?.idx ?? t.length);
+    const tgt = uniq[i].label;
+    const slope  = seg.match(new RegExp('Slope\\s*[:.]?\\s*' + num, 'i'));
+    const yInter = seg.match(new RegExp('Y[\\s\\-_.,]*Int(?:er)?\\s*[:.]?\\s*' + num, 'i'));
+    // R² 값: "Eff" 직전에 오는 0.xxx 또는 1 값으로 추출 (R 글자가 g/9/B 등으로 OCR돼도 OK)
+    const r2     = seg.match(/(0[.,]\d+|1(?:[.,]0+)?)\s+(?=Eff)/i);
+    const eff    = seg.match(new RegExp('Eff\\s*%?\\s*[:.]?\\s*' + num, 'i'));
+    result[tgt] = {
+      slope:  parseNum(slope?.[1]),
+      yInter: parseNum(yInter?.[1]),
+      r2:     parseNum(r2?.[1]),
+      eff:    parseNum(eff?.[1]),
+    };
+  }
+  return result;
+}
+function _parseCurveTextOld(text) {
+  // 정규화: 노이즈 문자 제거, 공백 정리
+  const t = text.replace(/ /g, ' ').replace(/[│|]/g, ' ');
+  const result = {
+    'BCR-ABL': { slope: null, yInter: null, r2: null, eff: null },
+    'ABL':     { slope: null, yInter: null, r2: null, eff: null },
+  };
+  const num = '(-?\\d+(?:\\.\\d+)?)';
+  // Target 단위로 분리: "Target: BCR-ABL ..." / "Target: ABL ..."
+  // BCR-ABL이 ABL을 포함하므로 BCR-ABL을 먼저 매칭
+  const splitRegex = /Target\s*[:\.]?\s*(BCR[\s\-_]?ABL|ABL)/gi;
+  const tokens = [];
+  let m;
+  while ((m = splitRegex.exec(t)) !== null) {
+    tokens.push({ idx: m.index, label: m[1].toUpperCase().replace(/[\s\-_]/g, '') === 'BCRABL' ? 'BCR-ABL' : 'ABL', start: splitRegex.lastIndex });
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    const seg = t.slice(tokens[i].start, tokens[i+1]?.idx ?? t.length);
+    const tgt = tokens[i].label;
+    const slope  = seg.match(new RegExp(`Slope\\s*[:\\.]?\\s*${num}`, 'i'));
+    const yInter = seg.match(new RegExp(`Y[\\s\\-_]?Inter\\s*[:\\.]?\\s*${num}`, 'i'));
+    const r2     = seg.match(new RegExp(`R\\s*[²2\\^]?\\s*[:\\.]?\\s*${num}`, 'i'));
+    const eff    = seg.match(new RegExp(`Eff\\s*%?\\s*[:\\.]?\\s*${num}`, 'i'));
+    result[tgt] = {
+      slope:  slope  ? parseFloat(slope[1])  : null,
+      yInter: yInter ? parseFloat(yInter[1]) : null,
+      r2:     r2     ? parseFloat(r2[1])     : null,
+      eff:    eff    ? parseFloat(eff[1])    : null,
+    };
+  }
+  return result;
+}
+
+// SW 곡선값 편집 가능 폼
+function renderSwCurveForm() {
+  const c = STATE.swCurve;
+  const fld = (tgt, key, label, step) =>
+    `<label style="font-size:11px; color:var(--text-muted)">${label}</label>
+     <input type="number" step="${step}" data-tgt="${tgt}" data-key="${key}"
+       value="${c[tgt][key] != null ? c[tgt][key] : ''}"
+       style="width:100%; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px;" />`;
+  const block = (tgt, color) => `
+    <div style="background:#fafbfc; border:1px solid var(--border); border-left:3px solid ${color}; padding:10px 12px; border-radius:6px;">
+      <div style="font-weight:600; margin-bottom:6px;">${tgt}</div>
+      <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px;">
+        ${fld(tgt,'slope','Slope','0.001')}
+        ${fld(tgt,'yInter','Y-Inter','0.001')}
+        ${fld(tgt,'r2','R²','0.001')}
+        ${fld(tgt,'eff','Eff%','0.01')}
+      </div>
+    </div>`;
+  document.getElementById('swCurveValues').innerHTML =
+    `<div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px;">
+      ${block('BCR-ABL', '#dc2626')}
+      ${block('ABL', '#10b981')}
+    </div>
+    <div class="small" style="margin-top:6px;">💡 인식이 부정확한 경우 직접 수정하세요. 빈 칸은 자동 계산값으로 대체됩니다.</div>`;
+  // 입력 변경 → STATE 업데이트 + QC 재분석
+  document.querySelectorAll('#swCurveValues input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      const v = e.target.value === '' ? null : parseFloat(e.target.value);
+      STATE.swCurve[e.target.dataset.tgt][e.target.dataset.key] = isNaN(v) ? null : v;
+      if (STATE.parsed) analyze();
+    });
+  });
+}
+
+// ============================================================
+// 파싱: Results 시트 (8행 헤더, 9행~ 데이터)
+// ============================================================
+function parseWorkbook(wb) {
+  // Results 시트 우선, 없으면 첫 시트
+  const sheetName = wb.SheetNames.find(n => /result/i.test(n)) || wb.SheetNames[0];
+  const ws = wb.Sheets[sheetName];
+  const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  // 메타데이터 추출 (1~7행)
+  const metadata = {};
+  for (let i = 0; i < 7; i++) {
+    const row = aoa[i] || [];
+    if (row[0] && row[1] != null) metadata[row[0]] = row[1];
+  }
+
+  // 헤더 찾기 (Well 로 시작하는 행)
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(20, aoa.length); i++) {
+    const row = aoa[i] || [];
+    if (row[0] === 'Well' || (typeof row[0] === 'string' && row[0].toLowerCase() === 'well')) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) throw new Error('Results 시트에서 헤더(Well)를 찾을 수 없습니다.');
+
+  const headers = aoa[headerIdx].map(h => (h == null ? '' : String(h)));
+  // Cт는 그리스 타우 → 정규화
+  const normHeaders = headers.map(h => h.replace(/C[ТτΤт]/g, 'Ct').trim());
+
+  const rows = [];
+  for (let i = headerIdx + 1; i < aoa.length; i++) {
+    const row = aoa[i];
+    if (!row || row.every(c => c == null || c === '')) continue;
+    const obj = {};
+    normHeaders.forEach((h, j) => { obj[h] = row[j]; });
+    if (!obj['Well']) continue;
+    rows.push(obj);
+  }
+
+  STATE.metadata = metadata;
+  STATE.rawRows = rows;
+}
+
+// ============================================================
+// 분석 메인
+// ============================================================
+function analyze() {
+  if (!STATE.rawRows) return;
+  STATE.cfNumerator = +document.getElementById('cfNumerator').value || 0.101;
+
+  const standards = [];
+  const ntcs = [];
+  const sampleMap = new Map(); // sampleName -> { 'BCR-ABL': [rows], 'ABL': [rows] }
+
+  for (const r of STATE.rawRows) {
+    const task = String(r['Task'] || '').toUpperCase();
+    const target = String(r['Target Name'] || '').trim();
+    const sample = String(r['Sample Name'] || '').trim();
+
+    if (task === 'STANDARD') standards.push(r);
+    else if (task === 'NTC') ntcs.push(r);
+    else if (task === 'UNKNOWN') {
+      if (!sampleMap.has(sample)) sampleMap.set(sample, {});
+      const e = sampleMap.get(sample);
+      if (!e[target]) e[target] = [];
+      e[target].push(r);
+    }
+  }
+
+  // IS-CAL 샘플로 CF 계산
+  let cf = 1;
+  let cfNote = 'IS-CAL 샘플 미발견 — CF=1 적용';
+  const isCalKey = [...sampleMap.keys()].find(k => /^IS[\s\-]?CAL/i.test(k));
+  if (isCalKey) {
+    const ic = sampleMap.get(isCalKey);
+    const bcr = qtyMean(ic['BCR-ABL']);
+    const abl = qtyMean(ic['ABL']);
+    if (bcr != null && abl && abl > 0) {
+      const ncnIsCal = (bcr / abl) * 100;
+      cf = STATE.cfNumerator / ncnIsCal;
+      cfNote = `IS-CAL NCN=${ncnIsCal.toFixed(4)}% → CF=${cf.toFixed(4)}`;
+    }
+  }
+  STATE.cfApplied = cf;
+
+  // 환자 샘플 결과 계산 (IS-CAL, HC, PC1, PC2 등 컨트롤 분리)
+  const ctrlPatterns = /^(IS[\s\-]?CAL|HC|PC\d*|NC\d*|RT[\s\-]?neg)$/i;
+  const patients = [];
+  const controls = [];
+  for (const [name, e] of sampleMap.entries()) {
+    const result = computeSampleResult(name, e, cf);
+    if (ctrlPatterns.test(name)) controls.push(result);
+    else patients.push(result);
+  }
+  // 샘플명 오름차순 정렬 후 No. 부여 (자연 정렬: 숫자/문자 혼합 대응)
+  patients.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  patients.forEach((p, i) => { p.no = i + 1; });
+
+  // 표준곡선 계산 (BCR-ABL / ABL 각각)
+  const curves = {
+    'BCR-ABL': fitStandardCurve(standards.filter(s => s['Target Name'] === 'BCR-ABL')),
+    'ABL': fitStandardCurve(standards.filter(s => s['Target Name'] === 'ABL')),
+  };
+
+  // QC 판정
+  const qc = runQC({ standards, ntcs, patients, curves, controls });
+
+  STATE.parsed = { patients, controls, standards, ntcs, curves, qc, sampleMap };
+
+  renderQCTab();
+  renderRawTab();
+  renderSummaryTab();
+  renderReportTab();
+  renderWorkListTab();
+}
+
+function qtyMean(rows) {
+  if (!rows || !rows.length) return null;
+  const v = rows.map(r => toNum(r['Quantity'])).filter(x => x != null && !isNaN(x));
+  if (!v.length) return null;
+  // Quantity Mean 컬럼이 있으면 우선 사용
+  const qm = toNum(rows[0]['Quantity Mean']);
+  if (qm != null && !isNaN(qm)) return qm;
+  return v.reduce((a,b)=>a+b, 0) / v.length;
+}
+function toNum(v) {
+  if (v == null || v === '' || v === 'Undetermined') return null;
+  const n = +v;
+  return isFinite(n) ? n : null;
+}
+function ctsOf(rows) {
+  if (!rows) return [];
+  return rows.map(r => toNum(r['Ct'])).filter(x => x != null);
+}
+function ctMean(rows) {
+  if (!rows || !rows.length) return null;
+  const cm = toNum(rows[0]['Ct Mean']);
+  if (cm != null) return cm;
+  const cts = ctsOf(rows);
+  if (!cts.length) return null;
+  return cts.reduce((a,b)=>a+b, 0) / cts.length;
+}
+function ctSD(rows) {
+  if (!rows || !rows.length) return null;
+  const cs = toNum(rows[0]['Ct SD']);
+  if (cs != null) return cs;
+  const cts = ctsOf(rows);
+  if (cts.length < 2) return null;
+  const m = cts.reduce((a,b)=>a+b, 0) / cts.length;
+  const v = cts.reduce((a,b)=>a + (b-m)**2, 0) / (cts.length - 1);
+  return Math.sqrt(v);
+}
+
+// 샘플 결과 계산
+function computeSampleResult(name, e, cf) {
+  const bcrRows = e['BCR-ABL'] || [];
+  const ablRows = e['ABL'] || [];
+  const bcrQtyRaw = qtyMean(bcrRows);
+  const ablQty = qtyMean(ablRows);
+  const bcrCtMean = ctMean(bcrRows);
+  const ablCtMean = ctMean(ablRows);
+  const bcrCtSD = ctSD(bcrRows);
+  const ablCtSD = ctSD(ablRows);
+
+  // BCR-ABL detection (replicate 단위)
+  const bcrDetectedReps = bcrRows.filter(r => toNum(r['Quantity']) != null).length;
+  const bcrTotalReps = bcrRows.length || 2;
+  const ablDetectedReps = ablRows.filter(r => toNum(r['Quantity']) != null).length;
+  const ablTotalReps = ablRows.length || 2;
+
+  // K/2 규칙: replicate 일부만 detected → 미검출은 0으로 보고 평균 보정
+  // K_effective = K_raw × (detected / total)
+  let bcrQty = bcrQtyRaw;
+  let kAdjusted = false;
+  if (bcrQtyRaw != null && bcrDetectedReps > 0 && bcrDetectedReps < bcrTotalReps) {
+    bcrQty = bcrQtyRaw * (bcrDetectedReps / bcrTotalReps);
+    kAdjusted = true;
+  }
+
+  const bcrBelowLod = (bcrQty == null) || (bcrQty < SETTINGS.bcrLod) || (bcrDetectedReps === 0);
+
+  let ncn = null;
+  if (ablQty && ablQty > 0 && bcrQty != null) ncn = (bcrQty / ablQty) * 100;
+  else if (ablQty && ablQty > 0) ncn = 0;
+
+  let isNcn = (ncn != null) ? ncn * cf : null;
+
+  // 표시 형식 — 표 값 시트 양식 준수
+  // BCR-ABL: <3 미만은 "<3", 그 외 정수 반올림 (K/2 보정값 사용 — replicate 1/2 detected면 K/2)
+  const bcrDisplay = bcrBelowLod ? `<${SETTINGS.bcrLod}` :
+    (bcrQty != null ? Math.round(bcrQty).toString() : '-');
+  // ABL: 정수
+  const ablDisplay = ablQty != null ? Math.round(ablQty).toString() : '-';
+  // NCN / IS-NCN: 둘 다 검출한계 이하면 "<0.0026", 그 외 소수 4자리
+  const ncnBelowLod = (ncn != null && ncn <= SETTINGS.ncnLod);
+  const isNcnBelowLod = (isNcn != null && isNcn <= SETTINGS.ncnLod);
+  const ncnDisplay = ncn == null ? '-' : (ncnBelowLod ? `<${SETTINGS.ncnLod}` : ncn.toFixed(4));
+  const isNcnDisplay = isNcn == null ? '-' : (isNcnBelowLod ? `<${SETTINGS.ncnLod}` : isNcn.toFixed(4));
+
+  // MR 분류
+  let mr = '-';
+  if (isNcn != null) {
+    if (isNcn < SETTINGS.cmrCutoff) mr = 'CMR';
+    else if (isNcn < SETTINGS.mmrCutoff) mr = 'MMR';
+    else mr = 'No MMR';
+  }
+
+  // 플래그
+  const flags = [];
+  const highSd = bcrRows.some(r => String(r['HIGHSD']).toLowerCase() === 'true' || r['HIGHSD'] === true)
+              || ablRows.some(r => String(r['HIGHSD']).toLowerCase() === 'true' || r['HIGHSD'] === true);
+  const expFail = bcrRows.some(r => String(r['EXPFAIL']).toLowerCase() === 'true' || r['EXPFAIL'] === true)
+               || ablRows.some(r => String(r['EXPFAIL']).toLowerCase() === 'true' || r['EXPFAIL'] === true);
+  if (highSd) flags.push('HIGHSD');
+  if (expFail) flags.push('EXPFAIL');
+  if (ablQty != null && ablQty < SETTINGS.ablMin) flags.push('ABL부족');
+  if (kAdjusted) flags.push('K/2보정');
+
+  return {
+    name, bcrRows, ablRows, bcrQty, bcrQtyRaw, ablQty,
+    bcrCtMean, ablCtMean, bcrCtSD, ablCtSD,
+    bcrDetectedReps, bcrTotalReps, ablDetectedReps, ablTotalReps,
+    kAdjusted,
+    ncn, isNcn, mr,
+    bcrDisplay, ablDisplay, ncnDisplay, isNcnDisplay,
+    ncnBelowLod, isNcnBelowLod, flags,
+    ablFail: ablQty != null && ablQty <= SETTINGS.ablMin,
+  };
+}
+
+// ============================================================
+// 표준곡선 회귀 (Ct = slope × log10(Q) + intercept)
+// 효율 = (10^(-1/slope) - 1) × 100
+// ============================================================
+function fitStandardCurve(rows) {
+  const points = rows
+    .map(r => ({ q: toNum(r['Quantity']), ct: toNum(r['Ct']), sample: r['Sample Name'] }))
+    .filter(p => p.q != null && p.q > 0 && p.ct != null);
+  if (points.length < 3) return null;
+  const xs = points.map(p => Math.log10(p.q));
+  const ys = points.map(p => p.ct);
+  const n = xs.length;
+  const sumX = xs.reduce((a,b)=>a+b,0);
+  const sumY = ys.reduce((a,b)=>a+b,0);
+  const meanX = sumX/n, meanY = sumY/n;
+  let sxx=0, sxy=0, syy=0;
+  for (let i=0; i<n; i++) {
+    sxx += (xs[i]-meanX)**2;
+    syy += (ys[i]-meanY)**2;
+    sxy += (xs[i]-meanX)*(ys[i]-meanY);
+  }
+  const slope = sxy / sxx;
+  const intercept = meanY - slope * meanX;
+  const r2 = (sxy*sxy) / (sxx * syy);
+  const efficiency = (Math.pow(10, -1/slope) - 1) * 100;
+  return { slope, intercept, r2, efficiency, points };
+}
+
+// ============================================================
+// QC 판정 (SOP 기준)
+// ============================================================
+function runQC({ standards, ntcs, patients, curves, controls }) {
+  const items = [];
+
+  // 1. Variations in Ct values between replicates (조건부 임계치)
+  const ctSdCheck = (rows) => {
+    let allPass = true;
+    let worst = { sd: 0, ctMean: 0, sample: '', target: '' };
+    for (const p of rows) {
+      const checks = [
+        { sd: p.bcrCtSD, ctMean: p.bcrCtMean, target: 'BCR-ABL' },
+        { sd: p.ablCtSD, ctMean: p.ablCtMean, target: 'ABL' },
+      ];
+      for (const ch of checks) {
+        if (ch.sd == null || ch.ctMean == null) continue;
+        const limit = ch.ctMean > SETTINGS.ctSdThreshold ? SETTINGS.ctSdHigh : SETTINGS.ctSdLow;
+        if (ch.sd > limit) {
+          allPass = false;
+          if (ch.sd > worst.sd) worst = { sd: ch.sd, ctMean: ch.ctMean, sample: p.name, target: ch.target };
+        }
+      }
+    }
+    return { pass: allPass, worst };
+  };
+  const sdRes = ctSdCheck([...patients, ...controls]);
+  items.push({
+    category: 'Ct SD',
+    item: 'Variations in Ct between replicates',
+    criteria: `≤${SETTINGS.ctSdLow} (Ct≤${SETTINGS.ctSdThreshold}) / ≤${SETTINGS.ctSdHigh} (Ct>${SETTINGS.ctSdThreshold})`,
+    value: sdRes.pass ? '전체 통과' : `최대 SD=${sdRes.worst.sd.toFixed(2)} (${sdRes.worst.sample}/${sdRes.worst.target})`,
+    pass: sdRes.pass
+  });
+
+  // 2. Slope for standard curves (BCR-ABL, ABL) — SW 캡쳐값 있으면 우선
+  for (const tgt of ['BCR-ABL', 'ABL']) {
+    const sw = STATE.swCurve[tgt]?.slope;
+    const calc = curves[tgt]?.slope;
+    const slope = sw != null ? sw : calc;
+    const src = sw != null ? 'SW' : (calc != null ? '계산' : null);
+    if (slope == null) {
+      items.push({ category: '표준곡선', item: `${tgt} Slope`, criteria: `${SETTINGS.slopeMin} ~ ${SETTINGS.slopeMax}`, value: '데이터 부족', pass: false });
+      continue;
+    }
+    items.push({
+      category: '표준곡선', item: `${tgt} Slope`,
+      criteria: `${SETTINGS.slopeMin} ~ ${SETTINGS.slopeMax}`,
+      value: `${slope.toFixed(3)} (${src})`,
+      pass: slope >= SETTINGS.slopeMin && slope <= SETTINGS.slopeMax
+    });
+  }
+
+  // 3. R² for standard curves — SW 캡쳐값 있으면 우선
+  for (const tgt of ['BCR-ABL', 'ABL']) {
+    const sw = STATE.swCurve[tgt]?.r2;
+    const calc = curves[tgt]?.r2;
+    const r2 = sw != null ? sw : calc;
+    const src = sw != null ? 'SW' : (calc != null ? '계산' : null);
+    if (r2 == null) continue;
+    const better = r2 >= SETTINGS.r2Better;
+    items.push({
+      category: '표준곡선', item: `${tgt} R²`,
+      criteria: `≥${SETTINGS.r2Min} (이상적 ≥${SETTINGS.r2Better})`,
+      value: `${r2.toFixed(4)}${better ? ' ✓' : ''} (${src})`,
+      pass: r2 >= SETTINGS.r2Min
+    });
+  }
+
+  // 3-2. Efficiency — SW 캡쳐값 있으면 별도 항목으로 추가
+  for (const tgt of ['BCR-ABL', 'ABL']) {
+    const sw = STATE.swCurve[tgt]?.eff;
+    if (sw == null) continue;
+    items.push({
+      category: '표준곡선', item: `${tgt} Eff%`,
+      criteria: `${SETTINGS.effMin} ~ ${SETTINGS.effMax}`,
+      value: `${sw.toFixed(2)}% (SW)`,
+      pass: sw >= SETTINGS.effMin && sw <= SETTINGS.effMax
+    });
+  }
+
+  // 4. SP1 standard dilution (BCR-ABL 10 copies plasmid) must be detected
+  const sp1Rows = standards.filter(s =>
+    String(s['Sample Name']).toUpperCase() === 'SP1' &&
+    s['Target Name'] === 'BCR-ABL'
+  );
+  const sp1Det = sp1Rows.filter(r => toNum(r['Ct']) != null);
+  items.push({
+    category: '표준점',
+    item: 'SP1 (BCR-ABL 10 copies)',
+    criteria: 'Detected & 표준곡선 포함',
+    value: sp1Rows.length ? `${sp1Det.length}/${sp1Rows.length} detected` : '없음',
+    pass: sp1Rows.length > 0 && sp1Det.length > 0
+  });
+
+  // 5. ABL_CN >10,000 (환자 + HC + IS-CAL)
+  const ablTargets = [...patients, ...controls.filter(c => /^(HC|IS[\s\-]?CAL)$/i.test(c.name))];
+  const ablFails = ablTargets.filter(p => p.ablQty == null || p.ablQty < SETTINGS.ablMin);
+  items.push({
+    category: '검체 품질',
+    item: 'ABL_CN (환자/HC/IS-CAL)',
+    criteria: `>${SETTINGS.ablMin.toLocaleString()} copies`,
+    value: `${ablTargets.length - ablFails.length}/${ablTargets.length} 통과`,
+    pass: ablFails.length === 0
+  });
+
+  // 6. PCR water (NTC) and RT-negative — ABL_CN=0 and Mbcr_CN=0
+  // NTC well은 모두 Undetermined 여야 함
+  const ntcDet = ntcs.filter(r => toNum(r['Ct']) != null);
+  const rtNegSamples = controls.filter(c => /RT[\s\-]?neg|H2O/i.test(c.name));
+  const ntcContams = rtNegSamples.filter(c =>
+    (c.bcrQty != null && c.bcrQty > 0) || (c.ablQty != null && c.ablQty > 0)
+  );
+  items.push({
+    category: 'NTC',
+    item: 'PCR water / RT-negative',
+    criteria: 'ABL_CN=0 and Mbcr_CN=0 (Undetermined)',
+    value: (ntcDet.length === 0 && ntcContams.length === 0) ? '오염 없음' :
+           `NTC ${ntcDet.length}건, RT-neg ${ntcContams.length}건 검출`,
+    pass: ntcDet.length === 0 && ntcContams.length === 0
+  });
+
+  // 7. NCN of IS-MMR Calibrator — 0.05 ~ 0.3
+  const isCal = controls.find(c => /^IS[\s\-]?CAL/i.test(c.name));
+  if (isCal && isCal.ncn != null) {
+    items.push({
+      category: 'Calibrator',
+      item: 'IS-CAL NCN',
+      criteria: `${SETTINGS.isCalNcnMin} ~ ${SETTINGS.isCalNcnMax}`,
+      value: isCal.ncn.toFixed(4),
+      pass: isCal.ncn >= SETTINGS.isCalNcnMin && isCal.ncn <= SETTINGS.isCalNcnMax
+    });
+  } else {
+    items.push({ category: 'Calibrator', item: 'IS-CAL NCN', criteria: `${SETTINGS.isCalNcnMin} ~ ${SETTINGS.isCalNcnMax}`, value: 'IS-CAL 미발견', pass: false });
+  }
+
+  // 8. High positive RNA control (HC) — must be detected
+  const hc = controls.find(c => /^HC/i.test(c.name));
+  items.push({
+    category: 'Positive Control',
+    item: 'HC (High positive)',
+    criteria: 'Detected',
+    value: hc && hc.bcrQty != null && hc.bcrQty > 0 ? `Detected (BCR-ABL=${hc.bcrQty.toFixed(0)})` : '미검출',
+    pass: !!(hc && hc.bcrQty != null && hc.bcrQty > 0)
+  });
+
+  // 9. NCN of HC converted to IS — Status: No MMR (≥0.15)
+  if (hc && hc.isNcn != null) {
+    items.push({
+      category: 'Positive Control',
+      item: 'HC IS-NCN',
+      criteria: `≥${SETTINGS.hcIsNcnMin} (No MMR)`,
+      value: hc.isNcn.toFixed(4) + (hc.isNcn >= SETTINGS.hcIsNcnMin ? ' (No MMR ✓)' : ''),
+      pass: hc.isNcn >= SETTINGS.hcIsNcnMin
+    });
+  }
+
+  return items;
+}
+
+// ============================================================
+// 렌더링
+// ============================================================
+function renderQCTab() {
+  const { qc, curves } = STATE.parsed;
+  let html = '';
+
+  const passCount = qc.filter(q => q.pass).length;
+  const overallPass = passCount === qc.length;
+  html += `<div class="stat-grid">
+    <div class="stat-card">
+      <div class="label">전체 QC</div>
+      <div class="value" style="color:${overallPass ? 'var(--accent)' : 'var(--danger)'}">${overallPass ? '통과' : '실패'}</div>
+      <div class="sub">${passCount} / ${qc.length} 항목 통과</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">CF 적용값</div>
+      <div class="value">${STATE.cfApplied != null ? STATE.cfApplied.toFixed(4) : '—'}</div>
+      <div class="sub">CF분자 ${STATE.cfNumerator}</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">표준점 수</div>
+      <div class="value">${(curves['BCR-ABL']?.points.length || 0)} / ${(curves['ABL']?.points.length || 0)}</div>
+      <div class="sub">BCR-ABL / ABL</div>
+    </div>
+  </div>`;
+
+  html += `<table>
+    <thead><tr><th>분류</th><th>항목</th><th>기준</th><th>측정값</th><th class="text-center">판정</th></tr></thead>
+    <tbody>`;
+  for (const q of qc) {
+    html += `<tr>
+      <td>${q.category}</td>
+      <td>${q.item}</td>
+      <td class="mono">${q.criteria}</td>
+      <td class="mono">${q.value}</td>
+      <td class="text-center"><span class="badge ${q.pass ? 'pass' : 'fail'}">${q.pass ? '✓ 통과' : '✗ 실패'}</span></td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  // 표준곡선 차트 + SW 캡쳐 이미지 (있으면)
+  html += `<h3 style="margin-top:24px; font-size:14px;">📈 표준곡선 (회귀 분석)</h3>
+    <div class="chart-wrap"><canvas id="curveChart"></canvas></div>`;
+  if (STATE.curveImage) {
+    html += `<h3 style="margin-top:16px; font-size:14px;">🖼️ 시약 SW 캡쳐 이미지</h3>
+      <div style="text-align:center; border:1px solid var(--border); border-radius:6px; padding:8px; background:#fafbfc;">
+        <img src="${STATE.curveImage}" style="max-width:100%; max-height:380px;" />
+      </div>`;
+  }
+
+  document.getElementById('qcContent').innerHTML = html;
+  drawCurveChart();
+}
+
+function drawCurveChart() {
+  const c1 = STATE.parsed.curves['BCR-ABL'];
+  const c2 = STATE.parsed.curves['ABL'];
+  const datasets = [];
+  const buildLine = (curve, xs) => xs.map(x => ({ x, y: curve.slope * x + curve.intercept }));
+
+  if (c1) {
+    datasets.push({
+      type: 'scatter', label: 'BCR-ABL 표준점',
+      data: c1.points.map(p => ({ x: Math.log10(p.q), y: p.ct })),
+      backgroundColor: '#dc2626', borderColor: '#dc2626', pointRadius: 5,
+    });
+    const xs = c1.points.map(p => Math.log10(p.q));
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    datasets.push({
+      type: 'line', label: `BCR-ABL 회귀 (R²=${c1.r2.toFixed(3)}, eff=${c1.efficiency.toFixed(1)}%)`,
+      data: buildLine(c1, [xMin, xMax]), borderColor: '#dc2626', borderWidth: 1.5,
+      pointRadius: 0, fill: false, borderDash: [4,4],
+    });
+  }
+  if (c2) {
+    datasets.push({
+      type: 'scatter', label: 'ABL 표준점',
+      data: c2.points.map(p => ({ x: Math.log10(p.q), y: p.ct })),
+      backgroundColor: '#10b981', borderColor: '#10b981', pointRadius: 5,
+    });
+    const xs = c2.points.map(p => Math.log10(p.q));
+    const xMin = Math.min(...xs), xMax = Math.max(...xs);
+    datasets.push({
+      type: 'line', label: `ABL 회귀 (R²=${c2.r2.toFixed(3)}, eff=${c2.efficiency.toFixed(1)}%)`,
+      data: buildLine(c2, [xMin, xMax]), borderColor: '#10b981', borderWidth: 1.5,
+      pointRadius: 0, fill: false, borderDash: [4,4],
+    });
+  }
+
+  const canvas = document.getElementById('curveChart');
+  if (!canvas || !datasets.length) return;
+  if (window._chart) window._chart.destroy();
+  window._chart = new Chart(canvas, {
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type: 'linear', title: { display: true, text: 'log₁₀(Quantity)' } },
+        y: { title: { display: true, text: 'Ct' }, reverse: true },
+      },
+      plugins: { legend: { position: 'bottom' } },
+    }
+  });
+}
+
+function renderPatientTab() {
+  const { patients } = STATE.parsed;
+  if (!patients.length) {
+    document.getElementById('patientContent').innerHTML = '<div class="empty">환자 샘플이 없습니다.</div>';
+    return;
+  }
+  let html = `<div class="small" style="margin-bottom:8px;">
+    💡 <strong>Previous study</strong> 컬럼은 LIS 입력 시 그대로 복사됩니다. 환자 이력을 직접 기재하세요.
+  </div>
+  <table>
+    <thead><tr>
+      <th>No.</th><th>Sample</th>
+      <th class="text-right">BCR-ABL CN</th>
+      <th class="text-right">ABL CN</th>
+      <th class="text-right">NCN (%)</th>
+      <th class="text-right">IS-NCN (%)</th>
+      <th class="text-center">Molecular Response</th>
+      <th>Flags</th>
+      <th style="min-width:200px;">Previous study</th>
+    </tr></thead><tbody>`;
+  for (const p of patients) {
+    const cls = (p.flags.includes('EXPFAIL') || p.ablFail) ? 'row-fail'
+              : (p.flags.length ? 'row-warn' : '');
+    const mrCls = p.mr === 'CMR' ? 'cmr' : (p.mr === 'MMR' ? 'mmr' : (p.mr === 'No MMR' ? 'nommr' : ''));
+    const ablCellStyle = p.ablFail ? 'color:var(--danger); font-weight:700;' : '';
+    html += `<tr class="${cls}">
+      <td>${p.no}</td>
+      <td class="mono">${p.name}</td>
+      <td class="text-right mono">${p.bcrDisplay}</td>
+      <td class="text-right mono" style="${ablCellStyle}">${p.ablDisplay}${p.ablFail ? ' ⚠' : ''}</td>
+      <td class="text-right mono">${p.ncnDisplay}</td>
+      <td class="text-right mono"><strong>${p.isNcnDisplay}</strong></td>
+      <td class="text-center"><span class="badge ${mrCls}">${p.mr}</span></td>
+      <td>${p.flags.map(f => `<span class="badge warn">${f}</span>`).join(' ')}</td>
+      <td><input type="text" class="prev-study-input" data-sample="${p.name}"
+            value="${(STATE.prevStudy[p.name] || '').replace(/"/g,'&quot;')}"
+            placeholder="(YYYY.MM.DD)-EDTA WB : ..."
+            style="width:100%; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px;" /></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('patientContent').innerHTML = html;
+  // bind prev-study inputs
+  document.querySelectorAll('.prev-study-input').forEach(inp => {
+    inp.addEventListener('input', (e) => setPrevStudy(e.target.dataset.sample, e.target.value));
+  });
+}
+
+function renderRawTab() {
+  const rows = STATE.rawRows;
+  if (!rows || !rows.length) return;
+  const cols = ['Well','Sample Name','Target Name','Task','Ct','Ct Mean','Ct SD','Quantity','Quantity Mean','HIGHSD','EXPFAIL'];
+  let html = `<div class="small" style="margin-bottom:8px;">총 ${rows.length}개 well</div>
+    <div style="max-height: 540px; overflow-y: auto;"><table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  for (const r of rows) {
+    const isCtrl = String(r['Task']).toUpperCase() !== 'UNKNOWN';
+    const high = String(r['HIGHSD']).toLowerCase() === 'true' || r['HIGHSD'] === true;
+    const fail = String(r['EXPFAIL']).toLowerCase() === 'true' || r['EXPFAIL'] === true;
+    const cls = fail ? 'row-fail' : (high ? 'row-warn' : '');
+    html += `<tr class="${cls}">${cols.map(c => {
+      const v = r[c];
+      let dv = (v == null) ? '' : String(v);
+      if (typeof v === 'number') dv = v.toFixed(c.includes('Quantity') ? 2 : 4);
+      return `<td class="mono">${dv}</td>`;
+    }).join('')}</tr>`;
+  }
+  html += '</tbody></table></div>';
+  document.getElementById('rawContent').innerHTML = html;
+}
+
+function renderSummaryTab() {
+  const { patients, controls, qc } = STATE.parsed;
+  const passCount = qc.filter(q => q.pass).length;
+  const mrCount = { CMR: 0, MMR: 0, 'No MMR': 0 };
+  patients.forEach(p => { if (mrCount[p.mr] != null) mrCount[p.mr]++; });
+
+  let html = `<div class="stat-grid">
+    <div class="stat-card"><div class="label">파일</div><div class="value" style="font-size:14px; word-break:break-all;">${STATE.fileName || '-'}</div><div class="sub">${STATE.metadata?.['Instrument Type'] || ''}</div></div>
+    <div class="stat-card"><div class="label">QC 통과</div><div class="value">${passCount}/${qc.length}</div></div>
+    <div class="stat-card"><div class="label">환자 샘플</div><div class="value">${patients.length}</div></div>
+    <div class="stat-card"><div class="label">CMR</div><div class="value" style="color:#1e40af">${mrCount.CMR}</div></div>
+    <div class="stat-card"><div class="label">MMR</div><div class="value" style="color:#92400e">${mrCount.MMR}</div></div>
+    <div class="stat-card"><div class="label">No MMR</div><div class="value" style="color:#991b1b">${mrCount['No MMR']}</div></div>
+  </div>`;
+
+  // 컨트롤 샘플
+  if (controls.length) {
+    html += `<h3 style="font-size:14px; margin-top:16px;">🧪 컨트롤 샘플</h3><table>
+      <thead><tr><th>Sample</th><th class="text-right">BCR-ABL CN</th><th class="text-right">ABL CN</th><th class="text-right">NCN (%)</th><th class="text-right">IS-NCN (%)</th></tr></thead><tbody>`;
+    for (const c of controls) {
+      html += `<tr><td class="mono">${c.name}</td>
+        <td class="text-right mono">${c.bcrDisplay}</td>
+        <td class="text-right mono">${c.ablDisplay}</td>
+        <td class="text-right mono">${c.ncnDisplay}</td>
+        <td class="text-right mono">${c.isNcnDisplay}</td></tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  // 메타데이터
+  if (STATE.metadata && Object.keys(STATE.metadata).length) {
+    html += `<h3 style="font-size:14px; margin-top:16px;">📋 실험 메타데이터</h3>
+      <table><tbody>`;
+    for (const [k, v] of Object.entries(STATE.metadata)) {
+      html += `<tr><td><strong>${k}</strong></td><td class="mono">${v}</td></tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+function renderReportTab() {
+  const { patients, qc } = STATE.parsed;
+  const passCount = qc.filter(q => q.pass).length;
+  const today = new Date().toISOString().slice(0, 10);
+
+  let html = `<div style="border:1px solid var(--border); border-radius:8px; padding:24px;">
+    <div style="text-align:center; padding-bottom:16px; border-bottom:2px solid var(--text);">
+      <div style="font-size:18px; font-weight:700;">BCR-ABL1 RQ-PCR 검사 결과 보고서</div>
+      <div class="small" style="margin-top:4px;">씨젠의료재단 분자유전검사실</div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; padding:12px 0; font-size:12px;">
+      <div><strong>보고일자:</strong> ${today}</div>
+      <div><strong>실험일자:</strong> ${(STATE.metadata?.['Experiment Run End Time'] || '-').toString().slice(0,10)}</div>
+      <div><strong>장비:</strong> ${STATE.metadata?.['Instrument Type'] || '-'}</div>
+      <div><strong>QC:</strong> ${passCount}/${qc.length} 통과 ${passCount===qc.length ? '(전체통과)' : '(주의)'}</div>
+      <div><strong>CF분자:</strong> ${STATE.cfNumerator}</div>
+      <div><strong>적용 CF:</strong> ${STATE.cfApplied?.toFixed(4) || '-'}</div>
+    </div>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:6px;">
+      <span style="color:var(--danger); font-weight:700; font-size:12px;">
+        AMR IS-NCN: ${SETTINGS.amrMin.toFixed(4)} ~ ${SETTINGS.amrMax.toFixed(4)}
+      </span>
+    </div>
+    <table style="margin-top:8px;">
+      <thead><tr>
+        <th>Sample</th>
+        <th class="text-right">BCR-ABL1 copy number</th>
+        <th class="text-right">ABL1 copy number</th>
+        <th class="text-right">NCN</th>
+        <th class="text-right">IS-NCN</th>
+        <th class="text-center">Molecular</th>
+      </tr></thead><tbody>`;
+  for (const p of patients) {
+    const mrCls = p.mr === 'CMR' ? 'cmr' : (p.mr === 'MMR' ? 'mmr' : 'nommr');
+    const ablStyle = p.ablFail ? 'color:var(--danger); font-weight:700;' : '';
+    html += `<tr>
+      <td class="mono">${p.name}</td>
+      <td class="text-right mono">${p.bcrDisplay}</td>
+      <td class="text-right mono" style="${ablStyle}">${p.ablDisplay}</td>
+      <td class="text-right mono">${p.ncnDisplay}</td>
+      <td class="text-right mono">${p.isNcnDisplay}</td>
+      <td class="text-center"><span class="badge ${mrCls}">${p.mr}</span></td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+
+    <!-- 검사자 / 컨펌자 서명란 (매뉴얼 컨펌 절차) -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-top:24px; padding-top:16px; border-top:1px solid var(--border);">
+      <div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:24px;">검사자 (Inspector)</div>
+        <div style="border-bottom:1px solid var(--text); margin-bottom:4px; height:32px;"></div>
+        <div style="font-size:10px; color:var(--text-muted);">서명 / 날짜:</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--text-muted); margin-bottom:24px;">컨펌자 (Reviewer)</div>
+        <div style="border-bottom:1px solid var(--text); margin-bottom:4px; height:32px;"></div>
+        <div style="font-size:10px; color:var(--text-muted);">서명 / 날짜:</div>
+      </div>
+    </div>
+
+    <div class="small" style="margin-top:16px; line-height:1.6;">
+      <strong>판정 기준:</strong><br>
+      • <strong>BCR-ABL1 copy number</strong>: ${SETTINGS.bcrLod} 미만 → "&lt;${SETTINGS.bcrLod}" 표시 (정수 반올림)<br>
+      • <strong>ABL1 copy number</strong>: ${SETTINGS.ablMin.toLocaleString()} 이하 시 fail (빨간색 강조)<br>
+      • <strong>NCN / IS-NCN</strong>: ${SETTINGS.ncnLod} 이하 → "&lt;${SETTINGS.ncnLod}" 표시 (그 외 소수 4자리)<br>
+      • <strong>Molecular Response</strong>:
+         IS-NCN ≥ ${SETTINGS.mmrCutoff} → No MMR /
+         ${SETTINGS.cmrCutoff} ~ ${SETTINGS.mmrCutoff} → MMR /
+         ${SETTINGS.cmrCutoff} 이하 → CMR (&lt;${SETTINGS.ncnLod} 포함)<br>
+      • <strong>계산식</strong>: NCN = (BCR-ABL Q.Mean / ABL Q.Mean) × 100,
+         IS-NCN = (NCN × ${STATE.cfNumerator}) / IS-CAL의 NCN
+    </div>
+  </div>`;
+
+  document.getElementById('reportContent').innerHTML = html;
+}
+
+// LIS 복사용 work list 값 시트 미리보기 (별도 탭)
+function renderWorkListTab() {
+  const { patients } = STATE.parsed;
+  document.getElementById('worklistContent').innerHTML = renderWorkListPreview(patients);
+  // 각 카드의 Previous study 입력 → STATE 저장
+  document.querySelectorAll('#worklistContent .prev-study-input').forEach(inp => {
+    inp.addEventListener('input', (e) => {
+      setPrevStudy(e.target.dataset.sample, e.target.value);
+      const card = e.target.closest('div');
+      const printEl = card?.querySelector('.prev-study-print');
+      if (printEl) printEl.textContent = e.target.value;
+    });
+  });
+  // 값 클릭 시 클립보드 복사
+  document.querySelectorAll('#worklistContent .copyable').forEach(el => {
+    el.addEventListener('click', async () => {
+      const text = el.dataset.copy;
+      if (await copyToClipboard(text)) flashCopied(el);
+    });
+  });
+  // "📋 전체" 버튼 — 한 환자 전체 정보 복사
+  document.querySelectorAll('#worklistContent .copy-all-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const text = btn.dataset.copyall;
+      if (await copyToClipboard(text)) flashCopied(btn);
+    });
+  });
+}
+
+// 클립보드 복사 (HTTPS / localhost 외 환경에서도 fallback)
+async function copyToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    // fallback: 임시 textarea 생성
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    console.error('복사 실패:', e);
+    return false;
+  }
+}
+
+// 복사 성공 시각 피드백 (1.2초)
+function flashCopied(el) {
+  el.classList.add('copied');
+  setTimeout(() => el.classList.remove('copied'), 1200);
+}
+
+function renderWorkListPreview(patients) {
+  if (!patients.length) return '<div class="empty">환자 샘플이 없습니다.</div>';
+
+  const total = patients.length;
+  const leftCount = Math.ceil(total / 2);
+  const left = patients.slice(0, leftCount);
+  const right = patients.slice(leftCount);
+  const blocks = Math.max(left.length, right.length);
+
+  const r4 = (x) => x == null ? '' : Math.round(x * 10000) / 10000;
+  const fmtBcr = (p) => !p ? '' : (p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : (p.bcrQty != null ? r4(p.bcrQty) : ''));
+  const fmtAbl = (p) => !p ? '' : (p.ablQty != null ? Math.round(p.ablQty) : '');  // ABL은 정수
+  const fmtNcn = (p) => !p ? '' : (p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : (p.ncn != null ? r4(p.ncn) : ''));
+  const fmtIs  = (p) => !p ? '' : (p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : (p.isNcn != null ? r4(p.isNcn) : ''));
+
+  // 한 샘플 블록 렌더 — Previous study 입력란 포함 (편집 가능)
+  // 값들은 클릭 시 클립보드 복사 가능
+  const renderBlock = (p) => {
+    if (!p) return `<div style="visibility:hidden">.</div>`;
+    const note = STATE.prevStudy[p.name] || '';
+    const mrCls = p.mr === 'CMR' ? 'cmr' : (p.mr === 'MMR' ? 'mmr' : 'nommr');
+    const safeName = p.name.replace(/"/g, '&quot;');
+    const safeNote = note.replace(/"/g, '&quot;');
+    const bcrV = fmtBcr(p);
+    const ablV = fmtAbl(p);
+    const ncnV = fmtNcn(p);
+    const isV  = fmtIs(p);
+    // 전체 복사용 텍스트 (라벨 포함, LIS 입력에 적합한 라인 형식)
+    const allText = `${p.name}\nBCR::ABL1: ${bcrV}\nABL1: ${ablV}\nNCN: ${ncnV}\n%IS: ${isV}`;
+    const cell = (val, label) => `<td class="mono copyable no-print" data-copy="${String(val).replace(/"/g,'&quot;')}" title="클릭하여 복사" style="padding:2px 6px; border:none;">${val}</td>`;
+    const cellPrint = (val) => `<td class="mono only-print" style="padding:2px 6px; border:none;">${val}</td>`;
+    return `
+      <div style="border:1px solid var(--border); border-radius:6px; padding:10px 12px; background:#fafbfc;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
+          <div>
+            <span style="font-weight:700;">${p.no}</span>
+            <span class="mono copyable no-print" data-copy="${safeName}" title="샘플명 복사" style="font-weight:600; margin-left:6px; padding:1px 4px;">${p.name}</span>
+            <span class="mono only-print" style="font-weight:600; margin-left:6px;">${p.name}</span>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <span class="badge ${mrCls}">${p.mr}</span>
+            <button type="button" class="copy-all-btn no-print" data-copyall="${allText.replace(/"/g,'&quot;').replace(/\n/g,'&#10;')}" title="전체 복사">📋 전체</button>
+          </div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div class="small" style="color:var(--text-muted); margin-bottom:2px;">[Previous study]</div>
+          <textarea class="prev-study-input no-print" data-sample="${safeName}"
+            placeholder="(YYYY.MM.DD)-EDTA WB : ..."
+            style="width:100%; min-height:42px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:11px; font-family:inherit; resize:vertical; background:white;">${safeNote}</textarea>
+          <div class="prev-study-print only-print mono" style="font-size:11px; padding:4px 6px; background:white; border-radius:4px; min-height:32px; white-space:pre-wrap;">${note}</div>
+        </div>
+        <table style="font-size:12px; border:none;">
+          <tr><td style="padding:2px 6px; border:none; color:var(--text-muted); width:80px;">BCR::ABL1:</td>${cell(bcrV)}${cellPrint(bcrV)}</tr>
+          <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">ABL1:</td>${cell(ablV)}${cellPrint(ablV)}</tr>
+          <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">NCN:</td>${cell(ncnV)}${cellPrint(ncnV)}</tr>
+          <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">%IS:</td>${cell(isV)}${cellPrint(isV)}</tr>
+        </table>
+      </div>`;
+  };
+
+  let html = `
+    <div class="small" style="color:var(--text-muted); margin-bottom:10px;">
+      Excel 다운로드 시 <code>work list 값</code> 시트에 출력되는 동일 양식입니다. LIS에 그대로 복사해 입력하세요. (소수 4자리 반올림 적용)
+      <br>💡 <strong>각 값을 클릭하면 클립보드에 자동 복사</strong>됩니다. <strong>📋 전체</strong> 버튼으로 한 환자 전체 정보를 한 번에 복사할 수 있습니다.
+    </div>
+    <div style="border:1px solid var(--border); border-radius:8px; padding:14px; background:white;">
+      <div style="font-weight:600; margin-bottom:10px; font-size:15px;">검사결과(raw data)</div>
+  `;
+
+  for (let i = 0; i < blocks; i++) {
+    html += `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+      ${renderBlock(left[i])}
+      ${renderBlock(right[i])}
+    </div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+// ============================================================
+// 탭 전환
+// ============================================================
+// 페이지 로드 시 캘리브레이션 상태 표시
+renderCalibStatus();
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    document.getElementById('tab-' + t.dataset.tab).style.display = 'block';
+  });
+});
+
+// ============================================================
+// 인쇄: 보고서 탭만
+// ============================================================
+function printReport() {
+  if (!STATE.parsed) { alert('먼저 파일을 업로드해주세요.'); return; }
+  // 현재 활성화된 탭을 인쇄 대상으로 (검사결과 보고 또는 Work List 등)
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab || 'report';
+  const targetPane = document.getElementById('tab-' + activeTab);
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('print-show'));
+  targetPane.classList.add('print-show');
+  targetPane.style.display = 'block';
+  setTimeout(() => window.print(), 100);
+}
+
+// ============================================================
+// Excel 다운로드
+// ============================================================
+async function downloadExcel() {
+  if (!STATE.parsed) { alert('먼저 파일을 업로드해주세요.'); return; }
+  const wb = XLSX.utils.book_new();
+  const { patients, controls, qc, curves } = STATE.parsed;
+
+  // Sheet 1: 검사 (원본 양식 — BCR-ABL 좌 / ABL 우 양면 + 하단 3섹션 가로 배치)
+  const { rows: examData, styleInfo } = buildExamSheet(patients, controls, qc, curves);
+  const wsExam = XLSX.utils.aoa_to_sheet(examData);
+  applyExamSheetStyles(wsExam, styleInfo);
+  wsExam['!cols'] = [
+    { wch: 5 },  // 0  No. (BCR-ABL) / 환자No.
+    { wch: 18 }, // 1  Sample Name (BCR-ABL) / 환자Sample
+    { wch: 11 }, // 2  Target
+    { wch: 9 },  // 3  Task
+    { wch: 9 },  // 4  Reporter
+    { wch: 9 },  // 5  Quencher / MR arrow
+    { wch: 10 }, // 6  Ct / BCR-ABL copy
+    { wch: 10 }, // 7  Ct Mean
+    { wch: 9 },  // 8  Ct SD
+    { wch: 11 }, // 9  Quantity
+    { wch: 13 }, // 10 Quantity Mean (BCR-ABL)
+    { wch: 12 }, // 11 Quantity SD / ABL copy
+    { wch: 3 },  // 12 gap
+    { wch: 7 },  // 13 No. (ABL)
+    { wch: 18 }, // 14 Sample Name (ABL)
+    { wch: 11 }, // 15 Target (ABL) / NCN
+    { wch: 9 },  // 16 Task (ABL)
+    { wch: 9 },  // 17 Reporter (ABL)
+    { wch: 9 },  // 18 Quencher (ABL)
+    { wch: 9 },  // 19 Ct (ABL) / IS-NCN
+    { wch: 10 }, // 20 Ct Mean (ABL)
+    { wch: 10 }, // 21 Ct SD (ABL) / Molecular
+    { wch: 11 }, // 22 Quantity (ABL)
+    { wch: 13 }, // 23 Qty Mean (ABL)
+    { wch: 12 }, // 24 Qty SD (ABL)
+    { wch: 12 }, // 25 NCN (per rep)
+    { wch: 14 }, // 26 NCN(Quanti Mean)
+    { wch: 12 }, // 27 IS-NCN
+  ];
+  XLSX.utils.book_append_sheet(wb, wsExam, '검사');
+
+  // Sheet 2: 검사결과 보고 (표 값 시트 양식)
+  const reportData = [
+    ['BCR-ABL1 RQ-PCR 검사 결과 보고서'],
+    ['보고일자', new Date().toISOString().slice(0,10)],
+    ['실험일자', (STATE.metadata?.['Experiment Run End Time']||'').toString().slice(0,10)],
+    ['CF분자', STATE.cfNumerator],
+    ['적용 CF', +STATE.cfApplied.toFixed(4)],
+    ['AMR IS-NCN', `${SETTINGS.amrMin.toFixed(4)} ~ ${SETTINGS.amrMax.toFixed(4)}`],
+    [],
+    ['No.','Sample','BCR-ABL1 copy number','ABL1 copy number','NCN','IS-NCN','Molecular'],
+    ...patients.map(p => [p.no, p.name, p.bcrDisplay, p.ablDisplay, p.ncnDisplay, p.isNcnDisplay, p.mr]),
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(reportData);
+  XLSX.utils.book_append_sheet(wb, ws1, '검사결과');
+
+  // Sheet 2: 환자결과 상세
+  const patientData = [
+    ['No.','Sample','BCR-ABL Quantity','ABL Quantity','BCR-ABL Ct Mean','ABL Ct Mean','BCR-ABL Ct SD','ABL Ct SD','NCN(%)','IS-NCN(%)','MR','Flags'],
+    ...patients.map(p => [
+      p.no, p.name,
+      p.bcrQty != null ? +p.bcrQty.toFixed(4) : null,
+      p.ablQty != null ? +p.ablQty.toFixed(2) : null,
+      p.bcrCtMean != null ? +p.bcrCtMean.toFixed(3) : null,
+      p.ablCtMean != null ? +p.ablCtMean.toFixed(3) : null,
+      p.bcrCtSD != null ? +p.bcrCtSD.toFixed(3) : null,
+      p.ablCtSD != null ? +p.ablCtSD.toFixed(3) : null,
+      p.ncn != null ? +p.ncn.toFixed(6) : null,
+      p.isNcn != null ? +p.isNcn.toFixed(6) : null,
+      p.mr,
+      p.flags.join(', '),
+    ])
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(patientData), '환자결과');
+
+  // Sheet 3: QC
+  const qcData = [
+    ['분류','항목','기준','측정값','판정'],
+    ...qc.map(q => [q.category, q.item, q.criteria, q.value, q.pass ? '통과' : '실패']),
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(qcData), 'QC결과');
+
+  // Sheet 4: 컨트롤
+  if (controls.length) {
+    const ctrlData = [
+      ['Sample','BCR-ABL Quantity','ABL Quantity','NCN(%)','IS-NCN(%)'],
+      ...controls.map(c => [c.name, c.bcrQty, c.ablQty, c.ncn, c.isNcn]),
+    ];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ctrlData), '컨트롤');
+  }
+
+  // Sheet 5: 표 값 (검사 시트의 결과를 값으로 붙여넣은 형태)
+  // - 숫자는 raw 정밀도로 저장, 셀 포맷으로 표시 (정수 / 4자리 소수)
+  // - 검출한계 미만은 "<3", "<0.0026" 텍스트
+  const tableHeaders = ['No.','Sample','BCR-ABL1 copy number','ABL1 copy number','NCN','IS-NCN','Molecular'];
+  const tableRows = patients.map(p => [
+    p.no,
+    p.name,
+    p.bcrDisplay === `<${SETTINGS.bcrLod}` ? p.bcrDisplay : (p.bcrQty != null ? p.bcrQty : null),
+    p.ablQty != null ? p.ablQty : null,
+    p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : (p.ncn != null ? p.ncn : null),
+    p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : (p.isNcn != null ? p.isNcn : null),
+    p.mr,
+  ]);
+  const ws5 = XLSX.utils.aoa_to_sheet([tableHeaders, ...tableRows]);
+  // 셀 포맷: BCR-ABL/ABL = 정수, NCN/IS-NCN = 소수 4자리
+  for (let i = 0; i < tableRows.length; i++) {
+    const r = i + 1; // header row 0
+    const cBcr = XLSX.utils.encode_cell({ r, c: 2 });
+    const cAbl = XLSX.utils.encode_cell({ r, c: 3 });
+    const cNcn = XLSX.utils.encode_cell({ r, c: 4 });
+    const cIs  = XLSX.utils.encode_cell({ r, c: 5 });
+    if (ws5[cBcr] && typeof ws5[cBcr].v === 'number') ws5[cBcr].z = '0';
+    if (ws5[cAbl] && typeof ws5[cAbl].v === 'number') ws5[cAbl].z = '0';
+    if (ws5[cNcn] && typeof ws5[cNcn].v === 'number') ws5[cNcn].z = '0.0000';
+    if (ws5[cIs]  && typeof ws5[cIs ].v === 'number') ws5[cIs ].z = '0.0000';
+  }
+  // AMR 라벨 (헤더 우측에)
+  XLSX.utils.sheet_add_aoa(ws5, [[`AMR IS-NCN: ${SETTINGS.amrMin.toFixed(4)} ~ ${SETTINGS.amrMax.toFixed(4)}`]], { origin: 'I1' });
+  XLSX.utils.book_append_sheet(wb, ws5, '표 값');
+
+  // Sheet 6: WORK LIST 값 (LIS 복사용 2열 워크리스트 양식)
+  const wlData = buildWorkListData(patients);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wlData), 'work list 값');
+
+  // Sheet 7: 원시 데이터
+  const rawHeaders = Object.keys(STATE.rawRows[0]);
+  const rawData = [rawHeaders, ...STATE.rawRows.map(r => rawHeaders.map(h => r[h]))];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rawData), 'Raw');
+
+  const fname = (STATE.fileName || 'BCR-ABL').replace(/\.(xls|xlsx)$/i, '') + '_분석결과.xlsx';
+
+  // 표준곡선 이미지가 있으면 검사 시트 BCR-ABL 영역(cols 0-11)에 삽입
+  if (STATE.curveImage && typeof JSZip !== 'undefined' && styleInfo.imageAnchorRow != null) {
+    try {
+      const arr = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const examSheetIdx = wb.SheetNames.indexOf('검사');
+      const endRow = Math.max(styleInfo.lastBottomRow + 1, styleInfo.imageAnchorRow + 25);
+      const imgBuf = await embedImageInXlsx(new Uint8Array(arr), examSheetIdx, STATE.curveImage,
+        styleInfo.imageAnchorRow, 0, endRow, 12);
+      const blob = new Blob([imgBuf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      return;
+    } catch (e) {
+      console.error('이미지 삽입 실패:', e);
+      alert('이미지 삽입에 실패했습니다. 이미지 없이 저장합니다.');
+    }
+  }
+  XLSX.writeFile(wb, fname);
+}
+
+// ============================================================
+// XLSX 파일에 이미지 삽입 (JSZip으로 zip 직접 조작)
+// ============================================================
+async function embedImageInXlsx(wbUint8, sheetIdx, imgDataUrl, startRow, startCol, endRow, endCol) {
+  const zip = await JSZip.loadAsync(wbUint8);
+  const sheetNum = sheetIdx + 1;
+
+  // data URL 파싱
+  const match = imgDataUrl.match(/^data:(image\/(\w+));base64,(.*)$/s);
+  if (!match) throw new Error('Invalid image data URL');
+  const mimeType = match[1];
+  const rawExt   = match[2].toLowerCase();
+  const ext      = rawExt === 'jpeg' ? 'jpg' : rawExt;
+  const b64      = match[3].replace(/[\r\n\s]/g, '');
+
+  // 이미지 추가
+  const imgFile = `curveImg.${ext}`;
+  zip.file(`xl/media/${imgFile}`, b64, { base64: true });
+
+  // drawing XML
+  zip.file(`xl/drawings/drawing${sheetNum}.xml`,
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <xdr:twoCellAnchor editAs="twoCell">
+    <xdr:from><xdr:col>${startCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${startRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>${endCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${endRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:pic>
+      <xdr:nvPicPr>
+        <xdr:cNvPr id="2" name="CurveImage"/>
+        <xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr>
+      </xdr:nvPicPr>
+      <xdr:blipFill>
+        <a:blip r:embed="rId1"/>
+        <a:stretch><a:fillRect/></a:stretch>
+      </xdr:blipFill>
+      <xdr:spPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="6096000" cy="3657600"/></a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+      </xdr:spPr>
+    </xdr:pic>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>`);
+
+  // drawing rels
+  zip.file(`xl/drawings/_rels/drawing${sheetNum}.xml.rels`,
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${imgFile}"/>
+</Relationships>`);
+
+  // 워크시트 XML — drawing 참조 추가
+  const wsPath = `xl/worksheets/sheet${sheetNum}.xml`;
+  const wsFile = zip.file(wsPath);
+  if (!wsFile) throw new Error(`Sheet XML not found: ${wsPath}`);
+  let wsXml = await wsFile.async('text');
+
+  console.log('[embedImage] sheetNum:', sheetNum, '| wsXml length:', wsXml.length, '| has xmlns:r:', /xmlns:r/.test(wsXml));
+  console.log('[embedImage] wsXml tail:', wsXml.slice(-500));
+
+  if (!wsXml.includes('<drawing')) {
+    // xmlns:r를 <drawing> 요소에 항상 직접 선언 (부모 요소 scope에 의존하지 않음)
+    const drawingRef = '<drawing xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId_drw"/>';
+    wsXml = wsXml.replace('</worksheet>', drawingRef + '</worksheet>');
+  }
+  zip.file(wsPath, wsXml);
+
+  // 워크시트 rels — 기존 파일이 있으면 관계 추가, 없으면 새로 생성
+  const wsRelsPath = `xl/worksheets/_rels/sheet${sheetNum}.xml.rels`;
+  const wsRelsFile = zip.file(wsRelsPath);
+  let wsRels;
+  if (wsRelsFile) {
+    wsRels = await wsRelsFile.async('text');
+    if (!wsRels.includes('rId_drw'))
+      wsRels = wsRels.replace('</Relationships>',
+        `  <Relationship Id="rId_drw" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${sheetNum}.xml"/>\n</Relationships>`);
+  } else {
+    wsRels =
+`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId_drw" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing${sheetNum}.xml"/>
+</Relationships>`;
+  }
+  zip.file(wsRelsPath, wsRels);
+
+  // [Content_Types].xml
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) throw new Error('[Content_Types].xml not found');
+  let ct = await ctFile.async('text');
+  console.log('[embedImage] [Content_Types].xml:', ct);
+
+  if (!ct.includes(`drawing${sheetNum}.xml`))
+    ct = ct.replace('</Types>',
+      `  <Override PartName="/xl/drawings/drawing${sheetNum}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>\n</Types>`);
+
+  const imgContentType = mimeType === 'image/jpg' ? 'image/jpeg' : mimeType;
+  // Extension="png" 형태로 검색 (점으로 검색하면 미매칭되어 중복 등록됨)
+  if (!ct.toLowerCase().includes(`extension="${ext.toLowerCase()}"`))
+    ct = ct.replace('</Types>',
+      `  <Default Extension="${ext}" ContentType="${imgContentType}"/>\n</Types>`);
+
+  zip.file('[Content_Types].xml', ct);
+
+  return await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' });
+}
+
+// ============================================================
+// "검사" 시트 하단 섹션 헬퍼 함수들
+// ============================================================
+
+function buildCurveSection() {
+  return Array.from({ length: 14 }, () => []); // 차트 이미지를 직접 붙여넣을 빈 공간
+}
+
+// QC 항목 빌더 — 각 항목: {criteria, acceptable, result, details[]}
+function buildQCItems(qc) {
+  const get    = (kw) => qc.find(q => q.item.includes(kw)) || {};
+  const slopes = qc.filter(q => q.item.includes('Slope'));
+  const r2s    = qc.filter(q => q.item.includes('R²'));
+  const isCalItem = qc.find(q => q.item.includes('IS-CAL NCN'));
+  const hcIsItem  = qc.find(q => q.item === 'HC IS-NCN');
+  const cleanVal  = (q) => (q.value || '').toString().replace(/ \(.*\)/, '').replace(/[✓✗]/g, '').trim();
+  const fmtLine   = (q) => {
+    const t = q.item.split(' ')[0].replace(/-/g, '_'); // BCR-ABL → BCR_ABL
+    return `${t}    ${cleanVal(q)}`;
+  };
+  const varItem   = get('Variations');
+  const sp1Item   = get('SP1');
+  const ablCnItem = get('ABL_CN');
+  const pcrItem   = get('PCR');
+  const hcItem    = get('HC (High');
+  return [
+    {
+      criteria:   'Variations in CT values between replicates',
+      acceptable: `≤2 CT if mean Ct value > ${SETTINGS.ctSdThreshold}\n≤1.5 CT if mean Ct value ≤${SETTINGS.ctSdThreshold}`,
+      result:     varItem.pass ? 'pass' : 'FAIL',
+      details:    [varItem.pass ? 'pass' : (cleanVal(varItem) || 'FAIL')],
+    },
+    {
+      criteria:   'Slope for standard curves',
+      acceptable: `Between ${SETTINGS.slopeMax} and ${SETTINGS.slopeMin}`,
+      result:     slopes.length && slopes.every(q => q.pass) ? 'pass' : 'FAIL',
+      details:    slopes.length ? slopes.map(fmtLine) : ['-'],
+    },
+    {
+      criteria:   'R² for standard curves',
+      acceptable: `At least > ${SETTINGS.r2Min} better if >${SETTINGS.r2Better}`,
+      result:     r2s.length && r2s.every(q => q.pass) ? 'pass' : 'FAIL',
+      details:    r2s.length ? r2s.map(fmtLine) : ['-'],
+    },
+    {
+      criteria:   'SP1 standard dilution\n(BCR-ABL 10 copies plasmid)',
+      acceptable: 'Must be detected and included in the standard curve',
+      result:     sp1Item.pass ? 'pass' : 'FAIL',
+      details:    [sp1Item.pass ? 'Detected' : 'Not detected'],
+    },
+    {
+      criteria:   'Quality control on ABL_CN value for patient samples, high positive RNA control, and the IS-MMR-Calibrator',
+      acceptable: `ABL_CN >${SETTINGS.ablMin.toLocaleString()} copies of ABL to reach the optimal sensitivity`,
+      result:     ablCnItem.pass ? 'pass' : 'FAIL',
+      details:    [`ABL_CN >${SETTINGS.ablMin.toLocaleString()}`],
+    },
+    {
+      criteria:   'PCR(water) and reverse transcription\n(RT negative) controls',
+      acceptable: 'For each ABL_CN = 0 and Mbcr_CN = 0',
+      result:     pcrItem.pass ? 'pass' : 'FAIL',
+      details:    ['Not detected'],
+    },
+    {
+      criteria:   'NCN obtained for IS-MMR Calibrator(NCN_IS)',
+      acceptable: `Must be within the interval ${SETTINGS.isCalNcnMin} ~ ${SETTINGS.isCalNcnMax}`,
+      result:     isCalItem ? (isCalItem.pass ? 'pass' : 'FAIL') : '-',
+      details:    [isCalItem ? `IS-NCN Mbcr_N = ${cleanVal(isCalItem)}` : '-'],
+    },
+    {
+      criteria:   'High positive RNA control',
+      acceptable: 'Must be detected',
+      result:     hcItem.pass ? 'pass' : 'FAIL',
+      details:    [hcItem.pass ? 'detected' : 'Not detected'],
+    },
+    {
+      criteria:   'NCN obtained for high positive RNA control\nconverted to the international scale',
+      acceptable: 'Status : No major molecular response',
+      result:     hcIsItem ? (hcIsItem.pass ? 'pass' : 'FAIL') : '-',
+      details:    [hcIsItem ? `IS-NCN_HC = ${(hcIsItem.value || '').split(' ')[0]} ≥ ${SETTINGS.hcIsNcnMin}` : '-'],
+    },
+  ];
+}
+
+function applyExamSheetStyles(ws, styleInfo) {
+  const bd = { style: 'thin', color: { rgb: '999999' } };
+  const border = { top: bd, bottom: bd, left: bd, right: bd };
+
+  const setStyle = (r, c, s) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    if (!ws[addr]) ws[addr] = { v: '', t: 's' };
+    ws[addr].s = s;
+  };
+
+  // ── BCR-ABL(cols 0-11) + ABL(cols 13-27) 배경 + 테두리
+  for (const ri of styleInfo.dataRows) {
+    for (let c = 0; c <= 11; c++)
+      setStyle(ri, c, { fill: { patternType: 'solid', fgColor: { rgb: 'CCE5FF' } }, border });
+    for (let c = 13; c <= 27; c++)
+      setStyle(ri, c, { fill: { patternType: 'solid', fgColor: { rgb: 'FCE4D6' } }, border });
+  }
+
+  // ── 분홍 + 볼드: NCN/NCN(Quanti Mean)/IS-NCN 헤더 (row 1, cols 25-27)
+  [25, 26, 27].forEach(c => setStyle(styleInfo.headerRowIdx, c, {
+    fill: { patternType: 'solid', fgColor: { rgb: 'DDA0DD' } },
+    font: { bold: true },
+    alignment: { horizontal: 'center', wrapText: true },
+    border,
+  }));
+
+  // ── 노란색: 환자 첫 replicate의 Sample Name(1,14) + Qty Mean(10,23)
+  const yellow = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFF99' } }, border };
+  for (const ri of styleInfo.patientFirstRepRows) {
+    [1, 10, 14, 23].forEach(c => setStyle(ri, c, yellow));
+  }
+  if (styleInfo.isCalNcnRow != null) setStyle(styleInfo.isCalNcnRow, 26, yellow);
+  if (styleInfo.hcIsNcnRow  != null) setStyle(styleInfo.hcIsNcnRow,  27, yellow);
+
+  // ── QC 헤더 행: 회색 + 볼드 + 테두리
+  const qcHStyle = {
+    fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } },
+    font: { bold: true },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border,
+  };
+  [13, 19, 23, 25].forEach(c => setStyle(styleInfo.qcHeaderRowIdx, c, qcHStyle));
+
+  // ── QC 본문 행: 각 셀 테두리 전체 적용 (merge edge 포함)
+  const qcCrit = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border };
+  const qcRes  = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'center', vertical: 'center' }, border };
+  const qcDet  = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFF99' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border };
+
+  // border를 기존 스타일에 merge해서 덮어쓰지 않는 헬퍼
+  const addBorder = (r, c) => {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    if (!ws[addr]) ws[addr] = { v: '', t: 's' };
+    ws[addr].s = { ...(ws[addr].s || {}), border };
+  };
+
+  // QC 헤더 ABL 영역 테두리
+  for (let c = 13; c <= 27; c++) addBorder(styleInfo.qcHeaderRowIdx, c);
+
+  // QC 본문 각 행 — 핵심 셀 스타일 설정 후 ABL 영역 테두리 덮어씌움
+  for (const ri of styleInfo.qcDetailRows) {
+    setStyle(ri, 13, qcCrit);
+    setStyle(ri, 19, qcCrit);
+    setStyle(ri, 23, qcRes);
+    setStyle(ri, 25, qcDet);
+    for (let c = 13; c <= 27; c++) addBorder(ri, c);
+  }
+
+  // ── IS-Cal 보정값 레이블 행 스타일 (CRITERIA 위) — X(23)+Y(24) 병합 레이블, Z-AB(25-27) 값
+  if (styleInfo.isCalLabelRowIdx != null) {
+    setStyle(styleInfo.isCalLabelRowIdx, 22, {
+      font: { bold: true, italic: true },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      border,
+    });
+    setStyle(styleInfo.isCalLabelRowIdx, 25, {
+      fill: { patternType: 'solid', fgColor: { rgb: 'FFFF99' } },
+      font: { bold: true },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border,
+    });
+    for (let c = 22; c <= 27; c++) addBorder(styleInfo.isCalLabelRowIdx, c);
+  }
+
+  // ── AMR IS-NCN 별도 행: 레이블(Y열=24) + 빨간 굵은 값 (내용 있는 24-27만 테두리)
+  setStyle(styleInfo.amrCellRow, 24, qcCrit);
+  setStyle(styleInfo.amrCellRow, styleInfo.amrCellCol, {
+    fill: { patternType: 'solid', fgColor: { rgb: 'FFFF99' } },
+    font: { color: { rgb: 'FF0000' }, bold: true },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border,
+  });
+  for (let c = 24; c <= 27; c++) addBorder(styleInfo.amrCellRow, c);
+
+  // ── 환자 결과 헤더 + 데이터
+  const patH = { fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } },
+    font: { bold: true }, alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border };
+  const patD = { fill: { patternType: 'solid', fgColor: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'center', vertical: 'center' }, border };
+  // 환자 헤더: cols 13-24만 테두리 (MR 범례 열 25-27은 테두리 없음)
+  [13, 14, 18, 20, 22, 23, 24].forEach(c => setStyle(styleInfo.patHRowIdx, c, patH));
+  for (let c = 13; c <= 24; c++) addBorder(styleInfo.patHRowIdx, c);
+
+  // 환자 데이터 행: cols 13-24 항상 테두리, MR 범례 있는 행(첫 3행)만 25-27 테두리
+  const mrLegendRowSet = new Set(styleInfo.mrLegendRows || []);
+  for (const ri of styleInfo.patResultRows) {
+    [13, 14, 18, 20, 22, 23, 24].forEach(c => setStyle(ri, c, patD));
+    for (let c = 13; c <= 24; c++) addBorder(ri, c);
+    if (mrLegendRowSet.has(ri)) {
+      for (let c = 25; c <= 27; c++) addBorder(ri, c);
+    }
+  }
+
+  // ── NCN(Z열=25): 소수점 3자리 고정, NCN QM(AA=26)/IS-NCN(AB=27): 소수점 4자리 고정
+  for (const ri of styleInfo.dataRows) {
+    if (ri === styleInfo.headerRowIdx) continue;
+    [[25, '0.000'], [26, '0.0000'], [27, '0.0000']].forEach(([c, fmt]) => {
+      const addr = XLSX.utils.encode_cell({ r: ri, c });
+      if (ws[addr] && typeof ws[addr].v === 'number')
+        ws[addr].s = { ...(ws[addr].s || {}), numFmt: fmt };
+    });
+  }
+
+  // ── 병합 적용
+  if (styleInfo.merges && styleInfo.merges.length) {
+    ws['!merges'] = (ws['!merges'] || []).concat(styleInfo.merges);
+  }
+}
+
+// ============================================================
+// "검사" 시트 빌더 — BCR-ABL 좌 / ABL 우 양면 + 하단 3섹션 가로 배치
+// ============================================================
+function buildExamSheet(patients, controls, qc, curves) {
+  const rows = [];
+  const dataRows           = []; // 측정 행 전체 (BCR-ABL 파란색 + ABL 주황색)
+  const patientFirstRepRows = []; // 환자 첫 replicate만 (노란색)
+  const merges             = []; // 병합 정의
+  let   isCalNcnRow        = null;
+  let   hcIsNcnRow         = null;
+
+  const expDate = (STATE.metadata?.['Experiment Run End Time'] || '').toString().slice(0, 10);
+  rows.push([`검사일자: ${expDate}`]);
+
+  // 컬럼 헤더 (Row 1)
+  const header = new Array(28).fill('');
+  ['SampleNo.', 'Sample Name','Target Name','Task','Reporter','Quencher','Cт','Cт Mean','Cт SD','Quantity','Quantity Mean','Quantity SD']
+    .forEach((h, i) => header[i] = h);
+  ['SampleNo.','Sample Name','Target Name','Task','Reporter','Quencher','Cт','Cт Mean','Cт SD','Quantity','Quantity Mean','Quantity SD','NCN','NCN\n(Quanti Mean)','IS-NCN']
+    .forEach((h, i) => header[13 + i] = h);
+  rows.push(header);
+  const headerRowIdx = 1;
+
+  const findRows = (sample, target) =>
+    STATE.rawRows.filter(r =>
+      String(r['Sample Name']).trim() === sample &&
+      String(r['Target Name']).trim() === target
+    );
+
+  const makeRowPair = (bcrSample, ablSample, j, sampleNoL, sampleNoR, isFirstRep) => {
+    const row = new Array(28).fill('');
+    const L = findRows(bcrSample, 'BCR-ABL')[j];
+    const R = findRows(ablSample, 'ABL')[j];
+    if (L) {
+      row[1]  = L['Sample Name']   || '';
+      row[2]  = L['Target Name']   || '';
+      row[3]  = L['Task']          || '';
+      row[4]  = L['Reporter']      || '';
+      row[5]  = L['Quencher']      || '';
+      row[6]  = L['Ct']            != null ? L['Ct']            : '';
+      row[7]  = L['Ct Mean']       != null ? L['Ct Mean']       : '';
+      row[8]  = L['Ct SD']         != null ? L['Ct SD']         : '';
+      row[9]  = L['Quantity']      != null ? L['Quantity']      : '';
+      row[10] = L['Quantity Mean'] != null ? L['Quantity Mean'] : '';
+      row[11] = L['Quantity SD']   != null ? L['Quantity SD']   : '';
+    }
+    if (R) {
+      if (isFirstRep) {
+        if (sampleNoL != null) row[0]  = sampleNoL;
+        if (sampleNoR != null) row[13] = sampleNoR;
+      }
+      row[14] = R['Sample Name']   || '';
+      row[15] = R['Target Name']   || '';
+      row[16] = R['Task']          || '';
+      row[17] = R['Reporter']      || '';
+      row[18] = R['Quencher']      || '';
+      row[19] = R['Ct']            != null ? R['Ct']            : '';
+      row[20] = R['Ct Mean']       != null ? R['Ct Mean']       : '';
+      row[21] = R['Ct SD']         != null ? R['Ct SD']         : '';
+      row[22] = R['Quantity']      != null ? R['Quantity']      : '';
+      row[23] = R['Quantity Mean'] != null ? R['Quantity Mean'] : '';
+      row[24] = R['Quantity SD']   != null ? R['Quantity SD']   : '';
+    }
+    const Lq = toNum(L?.['Quantity']);
+    const Rq = toNum(R?.['Quantity']);
+    if (R) row[25] = (Lq != null && Rq && Rq > 0) ? Math.round((Lq / Rq) * 100 * 1000) / 1000 : 0;
+    if (isFirstRep && R) {
+      const LqM = toNum(L?.['Quantity Mean']);
+      const RqM = toNum(R?.['Quantity Mean']);
+      const ncnQM = (LqM != null && RqM && RqM > 0) ? (LqM / RqM) * 100 : 0;
+      row[26] = Math.round(ncnQM * 10000) / 10000;
+      row[27] = STATE.cfApplied != null ? Math.round(ncnQM * STATE.cfApplied * 10000) / 10000 : 0;
+    }
+    return row;
+  };
+
+  // 헤더 행 배경색 포함
+  dataRows.push(headerRowIdx);
+
+  // 1) 표준곡선 — BCR-ABL/ABL 각자의 이름을 SampleNo.로 사용
+  const bcrStdNames = ['SP1','SP2','SP3','SP5','SP6'];
+  const ablStdNames = ['SP3','SP4','SP5','SP6','RT-neg'];
+  for (let i = 0; i < bcrStdNames.length; i++) {
+    for (let j = 0; j < 2; j++) {
+      dataRows.push(rows.length);
+      rows.push(makeRowPair(bcrStdNames[i], ablStdNames[i], j, bcrStdNames[i], ablStdNames[i], j === 0));
+    }
+  }
+
+  // 2) 환자 샘플 — 번호 유지, 첫 replicate만 노란색 대상
+  for (const p of patients) {
+    for (let j = 0; j < 2; j++) {
+      const ri = rows.length;
+      dataRows.push(ri);
+      if (j === 0) patientFirstRepRows.push(ri);
+      rows.push(makeRowPair(p.name, p.name, j, p.no, p.no, j === 0));
+    }
+  }
+
+  // 3) 컨트롤 — 이름을 SampleNo.로 사용, PC1/PC2 첫 replicate는 노란색
+  const ctrlOrder = ['PC1','PC2','HC','IS-CAL','H2O'];
+  for (const cname of ctrlOrder) {
+    const c = controls.find(x => x.name === cname);
+    if (!c) continue;
+    for (let j = 0; j < 2; j++) {
+      const ri = rows.length;
+      dataRows.push(ri);
+      if (j === 0) {
+        if (cname === 'PC1' || cname === 'PC2') patientFirstRepRows.push(ri);
+        if (cname === 'IS-CAL') isCalNcnRow = ri;
+        if (cname === 'HC')     hcIsNcnRow  = ri;
+      }
+      rows.push(makeRowPair(c.name, c.name, j, cname, cname, j === 0));
+    }
+  }
+
+  rows.push([]); // 빈 구분행
+
+  // ── 헬퍼: 행에 병합 추가 (Criteria:13-18, Acceptable:19-22, Result:23-24)
+  const addQCMerges = (startR, endR) => {
+    merges.push({ s: {r: startR, c: 13}, e: {r: endR, c: 18} });
+    merges.push({ s: {r: startR, c: 19}, e: {r: endR, c: 22} });
+    merges.push({ s: {r: startR, c: 23}, e: {r: endR, c: 24} });
+  };
+  const addDetailMerge = (ri) =>
+    merges.push({ s: {r: ri, c: 25}, e: {r: ri, c: 27} });
+
+  // ── IS-Cal 보정값 표시 행 (데이터 영역과 CRITERIA 사이)
+  const isCalLabelRowIdx = rows.length;
+  const isCalLabelRow = new Array(28).fill('');
+  isCalLabelRow[22] = '* IS-Cal Value % BCR-ABL/ABL : ';  // W열(22)~Y열(24) 병합
+  isCalLabelRow[25] = STATE.cfNumerator;
+  rows.push(isCalLabelRow);
+  merges.push({ s: {r: isCalLabelRowIdx, c: 22}, e: {r: isCalLabelRowIdx, c: 24} });
+  addDetailMerge(isCalLabelRowIdx);
+
+  // ── QC 테이블 헤더 (ABL 영역 아래)
+  const qcHeaderRowIdx = rows.length;
+  const qcH = new Array(28).fill('');
+  qcH[13] = 'Criteria'; qcH[19] = 'Acceptable values/results';
+  qcH[23] = 'Result';   qcH[25] = 'Detail';
+  rows.push(qcH);
+  addQCMerges(qcHeaderRowIdx, qcHeaderRowIdx);
+  addDetailMerge(qcHeaderRowIdx);
+
+  // ── QC 항목 본문
+  const qcDetailRows = [];
+  const qcItems = buildQCItems(qc);
+  for (const item of qcItems) {
+    const startR = rows.length;
+    for (let d = 0; d < item.details.length; d++) {
+      const row = new Array(28).fill('');
+      if (d === 0) {
+        row[13] = item.criteria;
+        row[19] = item.acceptable;
+        row[23] = item.result;
+      }
+      row[25] = item.details[d];
+      rows.push(row);
+      addDetailMerge(rows.length - 1);
+      qcDetailRows.push(rows.length - 1);
+    }
+    const endR = rows.length - 1;
+    addQCMerges(startR, endR);
+  }
+
+  // IS-Cal 값 행
+  const isCalValR = rows.length;
+  const isCalValRow = new Array(28).fill('');
+  isCalValRow[13] = 'IS-Cal Value % BCR-ABL/ABL';
+  isCalValRow[25] = STATE.cfNumerator;
+  rows.push(isCalValRow);
+  merges.push({ s: {r: isCalValR, c: 13}, e: {r: isCalValR, c: 24} });
+  addDetailMerge(isCalValR);
+  qcDetailRows.push(isCalValR);
+
+  rows.push([]); // 빈 구분행
+
+  // AMR IS-NCN 행 — QC 섹션 아래 별도 행 (Y열=24에 레이블, 25-27에 값)
+  const amrCellRow = rows.length;
+  const amrCellCol = 25;
+  const amrQCRow = new Array(28).fill('');
+  amrQCRow[24] = 'AMR IS-NCN';
+  amrQCRow[25] = `${SETTINGS.amrMin.toFixed(4)} ~ ${SETTINGS.amrMax.toFixed(4)}`;
+  rows.push(amrQCRow);
+  addDetailMerge(amrCellRow);
+
+  rows.push([]); // 빈 구분행
+
+  // ── 환자 결과 (QC 아래) — ABL 영역(13-27) 내 배치
+  // 컬럼: No(13) | Sample(14-17) | BCR-ABL(18-19) | ABL(20-21) | NCN(22) | IS-NCN(23) | Molecular(24=Y) | MR type(25) | MR range(26-27)
+  const mrLegend = [
+    ['No MMR', `IS-NCN ≥ ${SETTINGS.mmrCutoff}`],
+    ['MMR', `${SETTINGS.cmrCutoff} ≤ IS-NCN < ${SETTINGS.mmrCutoff}`],
+    ['CMR', `IS-NCN < ${SETTINGS.cmrCutoff}`],
+  ];
+
+  const patHRowIdx = rows.length;
+  const patHRow = new Array(28).fill('');
+  patHRow[13] = 'No.'; patHRow[14] = 'Sample';
+  patHRow[18] = 'BCR-ABL1 copy number'; patHRow[20] = 'ABL1 copy number';
+  patHRow[22] = 'NCN'; patHRow[23] = 'IS-NCN'; patHRow[24] = 'Molecular';
+  rows.push(patHRow);
+  merges.push({ s: {r: patHRowIdx, c: 14}, e: {r: patHRowIdx, c: 17} });
+  merges.push({ s: {r: patHRowIdx, c: 18}, e: {r: patHRowIdx, c: 19} });
+  merges.push({ s: {r: patHRowIdx, c: 20}, e: {r: patHRowIdx, c: 21} });
+
+  const patResultRows = [];
+  const mrLegendRows = []; // MR 범례가 있는 첫 3행 인덱스
+  for (let pi = 0; pi < patients.length; pi++) {
+    const p = patients[pi];
+    const ri = rows.length;
+    const row = new Array(28).fill('');
+    row[13] = p.no; row[14] = p.name; row[18] = p.bcrDisplay;
+    row[20] = p.ablDisplay; row[22] = p.ncnDisplay;
+    row[23] = p.isNcnDisplay; row[24] = p.mr;
+    if (pi < mrLegend.length) {
+      row[25] = mrLegend[pi][0];
+      row[26] = mrLegend[pi][1];
+      mrLegendRows.push(ri);
+    }
+    rows.push(row);
+    patResultRows.push(ri);
+    merges.push({ s: {r: ri, c: 14}, e: {r: ri, c: 17} });
+    merges.push({ s: {r: ri, c: 18}, e: {r: ri, c: 19} });
+    merges.push({ s: {r: ri, c: 20}, e: {r: ri, c: 21} });
+    if (pi < mrLegend.length) {
+      merges.push({ s: {r: ri, c: 26}, e: {r: ri, c: 27} });
+    }
+  }
+
+  return {
+    rows,
+    styleInfo: {
+      headerRowIdx,
+      dataRows,
+      patientFirstRepRows,
+      isCalNcnRow,
+      hcIsNcnRow,
+      isCalLabelRowIdx,
+      qcHeaderRowIdx,
+      qcDetailRows,
+      patHRowIdx,
+      patResultRows,
+      mrLegendRows,
+      amrCellRow,
+      amrCellCol,
+      imageAnchorRow: qcHeaderRowIdx,
+      lastBottomRow:  rows.length - 1,
+      merges,
+    },
+  };
+}
+
+// ============================================================
+// WORK LIST 값 시트 빌더 (2열 LIS 복사용 양식)
+// ============================================================
+// 1샘플 = 7행 블록:
+//   row 0: [No, Sample ID, '', PrevStudy notes]
+//   row 1: ['', MR status]
+//   row 2: ['', 'BCR::ABL1:', value]
+//   row 3: ['', 'ABL1:',      value]
+//   row 4: ['', 'NCN:',       value]
+//   row 5: ['', '%IS:',       value]
+//   row 6: empty
+// 좌측 = A~G (col 0~6), 우측 = H~N (col 7~13)
+function buildWorkListData(patients) {
+  const out = [];
+  out.push(['검사결과(raw data)']);
+  out.push([]);
+  // 좌/우 컬럼 분배: 절반씩
+  const total = patients.length;
+  const leftCount = Math.ceil(total / 2);
+  const left = patients.slice(0, leftCount);
+  const right = patients.slice(leftCount);
+  const blocks = Math.max(left.length, right.length);
+
+  // WORK LIST는 LIS 복사용 — 소수 4자리로 반올림 (ABL은 정수, 검사결과 보고와 일치)
+  const r4 = (x) => x == null ? '' : Math.round(x * 10000) / 10000;
+  const fmtBcr = (p) => p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : r4(p.bcrQty);
+  const fmtAbl = (p) => p.ablQty != null ? Math.round(p.ablQty) : '';  // ABL은 정수
+  const fmtNcn = (p) => p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : r4(p.ncn);
+  const fmtIs  = (p) => p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : r4(p.isNcn);
+
+  for (let i = 0; i < blocks; i++) {
+    const L = left[i], R = right[i];
+    const note = (p) => p ? (STATE.prevStudy[p.name] ? `[Previous study]\n${STATE.prevStudy[p.name]}` : '[Previous study]\n') : '';
+    // 7-row block; 좌측은 col 0~3, 우측은 col 7~10
+    const rows = [
+      [L?.no || '', L?.name || '', '',  note(L), '', '', '', R?.no || '', R?.name || '', '',  note(R)],
+      ['',         L?.mr || '',   '',  '',      '', '', '', '',         R?.mr || '',   '',  ''],
+      ['',         'BCR::ABL1:',  L ? fmtBcr(L) : '', '', '', '', '', '', 'BCR::ABL1:', R ? fmtBcr(R) : '', ''],
+      ['',         'ABL1:',       L ? fmtAbl(L) : '', '', '', '', '', '', 'ABL1:',       R ? fmtAbl(R) : '', ''],
+      ['',         'NCN:',        L ? fmtNcn(L) : '', '', '', '', '', '', 'NCN:',        R ? fmtNcn(R) : '', ''],
+      ['',         '%IS:',        L ? fmtIs(L)  : '', '', '', '', '', '', '%IS:',        R ? fmtIs(R)  : '', ''],
+      [],
+    ];
+    rows.forEach(r => out.push(r));
+  }
+  return out;
+}
+
+// ============================================================
+// 초기화
+// ============================================================
+function resetAll() {
+  if (!confirm('모든 데이터를 초기화하시겠습니까?')) return;
+  STATE.fileName = null; STATE.rawRows = null; STATE.metadata = null;
+  STATE.parsed = null; STATE.cfApplied = null; STATE.prevStudy = {};
+  clearCurveImage();
+  document.getElementById('fileLabel').textContent = '';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('cfNumerator').value = '0.101';
+  STATE.cfNumerator = 0.101;
+  if (window._chart) { window._chart.destroy(); window._chart = null; }
+  document.getElementById('qcContent').innerHTML = '<div class="empty">엑셀 파일을 업로드하면 QC 결과가 표시됩니다.</div>';
+  document.getElementById('rawContent').innerHTML = '<div class="empty">원시 데이터가 여기에 표시됩니다.</div>';
+  document.getElementById('summaryContent').innerHTML = '<div class="empty">요약 정보가 여기에 표시됩니다.</div>';
+  document.getElementById('reportContent').innerHTML = '<div class="empty">검사결과 보고서가 여기에 표시됩니다.</div>';
+  document.getElementById('worklistContent').innerHTML = '<div class="empty">Work List 미리보기가 여기에 표시됩니다.</div>';
+}
+</script>
+</body>
+</html>
