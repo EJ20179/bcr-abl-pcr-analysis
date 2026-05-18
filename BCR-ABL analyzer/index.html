@@ -390,8 +390,8 @@
       <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 12px; justify-content: center;">
         <div class="form-group">
           <label>⚙️ IS-CAL 보정값 (CF 분자)</label>
-          <input type="number" id="cfNumerator" value="0.101" step="0.001" min="0" />
-          <div class="help">IS-NCN 계산에 사용되는 보정 상수 (6개월 주기 재평가)</div>
+          <div style="font-size:15px; font-weight:600; padding:3px 0;"><span id="cfNumeratorDisplay">0.101</span></div>
+          <div class="help">QC/MR 기준값 설정에서 변경 가능 (6개월 주기 재평가)</div>
           <div id="calibStatusInline" class="help" style="margin-top:4px;"></div>
         </div>
         <button class="btn" onclick="openSettings()">🔧 QC/MR 기준값 설정</button>
@@ -501,6 +501,7 @@
       <label>HC IS-NCN 최소</label><input type="number" id="setHcMin" step="0.01" />
       <label>AMR IS-NCN 하한</label><input type="number" id="setAmrMin" step="0.0001" />
       <label>AMR IS-NCN 상한</label><input type="number" id="setAmrMax" step="0.0001" />
+      <label>IS-CAL 보정값 (CF 분자)</label><input type="number" id="cfNumerator" step="0.001" min="0" />
     </div>
     <div class="small" style="background:#fef3c7; padding:8px 10px; border-radius:6px; margin-top:8px;">
       💡 AMR(Analytical Measuring Range)은 주기적으로 재평가 후 수정합니다.
@@ -519,9 +520,16 @@
       <button type="button" class="btn" style="font-size:11px; padding:3px 8px;" onclick="addCalibFromModal()">＋ 현재 입력값 이력 추가</button>
     </h4>
     <div id="calibHistory" style="font-size:11px;"></div>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-      <button class="btn" onclick="resetSettings()">기본값 복원</button>
-      <button class="btn primary" onclick="saveSettings()">저장</button>
+    <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:16px;">
+      <div style="display:flex; gap:8px;">
+        <button class="btn" onclick="exportSettings()">⬇ 설정 내보내기</button>
+        <button class="btn" onclick="document.getElementById('importSettingsFile').click()">⬆ 설정 불러오기</button>
+        <input type="file" id="importSettingsFile" accept=".json" style="display:none" onchange="importSettings(event)" />
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" onclick="resetSettings()">기본값 복원</button>
+        <button class="btn primary" onclick="saveSettings()">저장</button>
+      </div>
     </div>
   </div>
 </div>
@@ -552,6 +560,7 @@ const DEFAULT_SETTINGS = {
   sp1Required: true,     // SP1 (BCR-ABL 10 copies) must be detected
   amrMin: 0.0023,        // AMR (Analytical Measuring Range) IS-NCN 하한
   amrMax: 42.3600,       // AMR IS-NCN 상한
+  cfNumerator: 0.101,    // IS-CAL 보정값 (CF 분자)
 };
 let SETTINGS = loadSettings();
 
@@ -665,8 +674,12 @@ function saveSettings() {
     hcIsNcnMin: +document.getElementById('setHcMin').value,
     amrMin: +document.getElementById('setAmrMin').value,
     amrMax: +document.getElementById('setAmrMax').value,
+    cfNumerator: +document.getElementById('cfNumerator').value || 0.101,
   };
   localStorage.setItem('bcrabl_settings', JSON.stringify(SETTINGS));
+  STATE.cfNumerator = SETTINGS.cfNumerator;
+  const dispEl = document.getElementById('cfNumeratorDisplay');
+  if (dispEl) dispEl.textContent = SETTINGS.cfNumerator;
   // 캘리브레이션 이력: 입력값이 최신과 다를 때만 새 이력 추가
   const changedAt = document.getElementById('setCalibChangedAt').value;
   const changedBy = document.getElementById('setCalibChangedBy').value.trim();
@@ -698,6 +711,40 @@ function resetSettings() {
   localStorage.removeItem('bcrabl_settings');
   fillSettingsForm();
 }
+function exportSettings() {
+  const data = {
+    version: 1,
+    exportedAt: new Date().toISOString().slice(0, 10),
+    settings: { ...SETTINGS },
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `bcrabl_settings_${data.exportedAt}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importSettings(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      const imported = parsed.settings || parsed; // version 1 형식 또는 plain 객체 모두 허용
+      SETTINGS = { ...DEFAULT_SETTINGS, ...imported };
+      localStorage.setItem('bcrabl_settings', JSON.stringify(SETTINGS));
+      fillSettingsForm();
+      STATE.cfNumerator = SETTINGS.cfNumerator ?? 0.101;
+      if (STATE.parsed) analyze();
+      alert('설정을 성공적으로 불러왔습니다.');
+    } catch {
+      alert('올바른 설정 파일이 아닙니다.');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // 같은 파일 재선택 가능하도록 초기화
+}
 function fillSettingsForm() {
   document.getElementById('setR2').value = SETTINGS.r2Min;
   document.getElementById('setR2Better').value = SETTINGS.r2Better;
@@ -717,6 +764,9 @@ function fillSettingsForm() {
   document.getElementById('setHcMin').value = SETTINGS.hcIsNcnMin;
   document.getElementById('setAmrMin').value = SETTINGS.amrMin;
   document.getElementById('setAmrMax').value = SETTINGS.amrMax;
+  document.getElementById('cfNumerator').value = SETTINGS.cfNumerator ?? 0.101;
+  const dispEl = document.getElementById('cfNumeratorDisplay');
+  if (dispEl) dispEl.textContent = SETTINGS.cfNumerator ?? 0.101;
   // 캘리브레이션 메타 (가장 최근 이력 표시)
   const meta = loadCalibMeta();
   document.getElementById('setCalibChangedAt').value = meta.changedAt || '';
@@ -829,8 +879,11 @@ function applyLatestCalibToSettings() {
   const meta = loadCalibMeta();
   if (meta.cfNumerator != null) {
     STATE.cfNumerator = meta.cfNumerator;
+    SETTINGS.cfNumerator = meta.cfNumerator;
     const cfEl = document.getElementById('cfNumerator');
     if (cfEl) cfEl.value = meta.cfNumerator;
+    const dispEl = document.getElementById('cfNumeratorDisplay');
+    if (dispEl) dispEl.textContent = meta.cfNumerator;
   }
   if (meta.amrMin != null) SETTINGS.amrMin = meta.amrMin;
   if (meta.amrMax != null) SETTINGS.amrMax = meta.amrMax;
@@ -884,7 +937,7 @@ const STATE = {
   rawRows: null,    // 파싱된 raw row 객체 배열
   metadata: null,   // 장비 정보 (1~7행)
   parsed: null,     // { samples, standards, ntcs, qc, curve }
-  cfNumerator: 0.101,
+  cfNumerator: SETTINGS.cfNumerator ?? 0.101,
   cfApplied: null,  // 실제 적용된 CF
   prevStudy: {},    // sampleName -> 'Previous study' 메모 (LIS 입력용)
   curveImage: null, // dataURL — 업로드한 표준곡선 캡쳐 이미지
@@ -914,10 +967,6 @@ dropZone.addEventListener('drop', (e) => {
 });
 fileInput.addEventListener('change', (e) => {
   if (e.target.files.length) handleFile(e.target.files[0]);
-});
-document.getElementById('cfNumerator').addEventListener('input', (e) => {
-  STATE.cfNumerator = +e.target.value || 0.101;
-  if (STATE.parsed) analyze();
 });
 
 function handleFile(file) {
@@ -1413,7 +1462,8 @@ function parseWorkbook(wb) {
 // ============================================================
 function analyze() {
   if (!STATE.rawRows) return;
-  STATE.cfNumerator = +document.getElementById('cfNumerator').value || 0.101;
+  const cfInput = +document.getElementById('cfNumerator').value;
+  STATE.cfNumerator = cfInput || SETTINGS.cfNumerator || 0.101;
 
   const standards = [];
   const ntcs = [];
@@ -2527,10 +2577,7 @@ function buildQCItems(qc) {
   const isCalItem = qc.find(q => q.item.includes('IS-CAL NCN'));
   const hcIsItem  = qc.find(q => q.item === 'HC IS-NCN');
   const cleanVal  = (q) => (q.value || '').toString().replace(/ \(.*\)/, '').replace(/[✓✗]/g, '').trim();
-  const fmtLine   = (q) => {
-    const t = q.item.split(' ')[0].replace(/-/g, '_'); // BCR-ABL → BCR_ABL
-    return `${t}    ${cleanVal(q)}`;
-  };
+  const fmtSplit  = (q) => ({ name: q.item.split(' ')[0], value: cleanVal(q) });
   const varItem   = get('Variations');
   const sp1Item   = get('SP1');
   const ablCnItem = get('ABL_CN');
@@ -2547,13 +2594,13 @@ function buildQCItems(qc) {
       criteria:   'Slope for standard curves',
       acceptable: `Between ${SETTINGS.slopeMax} and ${SETTINGS.slopeMin}`,
       result:     slopes.length && slopes.every(q => q.pass) ? 'pass' : 'FAIL',
-      details:    slopes.length ? slopes.map(fmtLine) : ['-'],
+      details:    slopes.length ? slopes.map(fmtSplit) : ['-'],
     },
     {
       criteria:   'R² for standard curves',
       acceptable: `At least > ${SETTINGS.r2Min} better if >${SETTINGS.r2Better}`,
       result:     r2s.length && r2s.every(q => q.pass) ? 'pass' : 'FAIL',
-      details:    r2s.length ? r2s.map(fmtLine) : ['-'],
+      details:    r2s.length ? r2s.map(fmtSplit) : ['-'],
     },
     {
       criteria:   'SP1 standard dilution\n(BCR-ABL 10 copies plasmid)',
@@ -2562,22 +2609,22 @@ function buildQCItems(qc) {
       details:    [sp1Item.pass ? 'Detected' : 'Not detected'],
     },
     {
-      criteria:   'Quality control on ABL_CN value for patient samples, high positive RNA control, and the IS-MMR-Calibrator',
-      acceptable: `ABL_CN >${SETTINGS.ablMin.toLocaleString()} copies of ABL to reach the optimal sensitivity`,
+      criteria:   'Quality control on ABL copy number value for patient samples, high positive RNA control, and the IS-MMR-Calibrator',
+      acceptable: `ABL copy number >${SETTINGS.ablMin.toLocaleString()} copies of ABL to reach the optimal sensitivity`,
       result:     ablCnItem.pass ? 'pass' : 'FAIL',
-      details:    [`ABL_CN >${SETTINGS.ablMin.toLocaleString()}`],
+      details:    [`ABL copy number >${SETTINGS.ablMin.toLocaleString()}`],
     },
     {
       criteria:   'PCR(water) and reverse transcription\n(RT negative) controls',
-      acceptable: 'For each ABL_CN = 0 and Mbcr_CN = 0',
+      acceptable: 'For each ABL copy number = 0 and Mbcr copy number = 0',
       result:     pcrItem.pass ? 'pass' : 'FAIL',
       details:    ['Not detected'],
     },
     {
-      criteria:   'NCN obtained for IS-MMR Calibrator(NCN_IS)',
+      criteria:   'Normalized copy number obtained for IS-MMR Calibrator',
       acceptable: `Must be within the interval ${SETTINGS.isCalNcnMin} ~ ${SETTINGS.isCalNcnMax}`,
       result:     isCalItem ? (isCalItem.pass ? 'pass' : 'FAIL') : '-',
-      details:    [isCalItem ? `IS-NCN Mbcr_N = ${cleanVal(isCalItem)}` : '-'],
+      details:    [isCalItem ? `IS-NCN Mbcr copy number = ${cleanVal(isCalItem)}` : '-'],
     },
     {
       criteria:   'High positive RNA control',
@@ -2586,10 +2633,10 @@ function buildQCItems(qc) {
       details:    [hcItem.pass ? 'detected' : 'Not detected'],
     },
     {
-      criteria:   'NCN obtained for high positive RNA control\nconverted to the international scale',
+      criteria:   'Normalized copy number obtained for high positive RNA control\nconverted to the international scale',
       acceptable: 'Status : No major molecular response',
       result:     hcIsItem ? (hcIsItem.pass ? 'pass' : 'FAIL') : '-',
-      details:    [hcIsItem ? `IS-NCN_HC = ${(hcIsItem.value || '').split(' ')[0]} ≥ ${SETTINGS.hcIsNcnMin}` : '-'],
+      details:    [hcIsItem ? `IS-NCN(high control) = ${(hcIsItem.value || '').split(' ')[0]} ≥ ${SETTINGS.hcIsNcnMin}` : '-'],
     },
   ];
 }
@@ -2656,11 +2703,13 @@ function applyExamSheetStyles(ws, styleInfo) {
   for (let c = 13; c <= 27; c++) addBorder(styleInfo.qcHeaderRowIdx, c);
 
   // QC 본문 각 행 — 핵심 셀 스타일 설정 후 ABL 영역 테두리 덮어씌움
+  const splitDetailRowSet = new Set(styleInfo.splitDetailRows || []);
   for (const ri of styleInfo.qcDetailRows) {
     setStyle(ri, 13, qcCrit);
     setStyle(ri, 19, qcCrit);
     setStyle(ri, 23, qcRes);
     setStyle(ri, 25, qcDet);
+    if (splitDetailRowSet.has(ri)) setStyle(ri, 27, qcDet);
     for (let c = 13; c <= 27; c++) addBorder(ri, c);
   }
 
@@ -2723,6 +2772,19 @@ function applyExamSheetStyles(ws, styleInfo) {
   if (styleInfo.merges && styleInfo.merges.length) {
     ws['!merges'] = (ws['!merges'] || []).concat(styleInfo.merges);
   }
+
+  // ── 행 높이: QC 섹션 텍스트 잘림 방지
+  const setH = (ri, hpt) => {
+    if (!ws['!rows']) ws['!rows'] = [];
+    while (ws['!rows'].length <= ri) ws['!rows'].push(null);
+    ws['!rows'][ri] = { ...(ws['!rows'][ri] || {}), hpt };
+  };
+  if (styleInfo.isCalLabelRowIdx != null) setH(styleInfo.isCalLabelRowIdx, 20);
+  setH(styleInfo.qcHeaderRowIdx, 28);
+  for (const ri of styleInfo.qcDetailRows) setH(ri, styleInfo.qcRowHeightMap?.[ri] ?? 22);
+  if (styleInfo.amrCellRow != null) setH(styleInfo.amrCellRow, 20);
+  if (styleInfo.patHRowIdx != null) setH(styleInfo.patHRowIdx, 25);
+  for (const ri of (styleInfo.patResultRows || [])) setH(ri, 18);
 }
 
 // ============================================================
@@ -2871,9 +2933,15 @@ function buildExamSheet(patients, controls, qc, curves) {
   addDetailMerge(qcHeaderRowIdx);
 
   // ── QC 항목 본문
+  // 항목 순서(buildQCItems): Variations, Slope, R², SP1, ABL CN, PCR, IS-CAL NCN, HC, HC IS-NCN
+  const QC_ITEM_HEIGHTS = [32, 18, 18, 28, 45, 28, 20, 18, 28];
   const qcDetailRows = [];
+  const splitDetailRows = [];
+  const qcRowHeightMap = {};
   const qcItems = buildQCItems(qc);
+  let qcItemIdx = 0;
   for (const item of qcItems) {
+    const itemH = QC_ITEM_HEIGHTS[qcItemIdx++] ?? 22;
     const startR = rows.length;
     for (let d = 0; d < item.details.length; d++) {
       const row = new Array(28).fill('');
@@ -2882,10 +2950,20 @@ function buildExamSheet(patients, controls, qc, curves) {
         row[19] = item.acceptable;
         row[23] = item.result;
       }
-      row[25] = item.details[d];
-      rows.push(row);
-      addDetailMerge(rows.length - 1);
+      const det = item.details[d];
+      if (det && typeof det === 'object' && 'name' in det) {
+        row[25] = det.name;
+        row[27] = det.value;
+        rows.push(row);
+        merges.push({ s: {r: rows.length - 1, c: 25}, e: {r: rows.length - 1, c: 26} });
+        splitDetailRows.push(rows.length - 1);
+      } else {
+        row[25] = det ?? '';
+        rows.push(row);
+        addDetailMerge(rows.length - 1);
+      }
       qcDetailRows.push(rows.length - 1);
+      qcRowHeightMap[rows.length - 1] = itemH;
     }
     const endR = rows.length - 1;
     addQCMerges(startR, endR);
@@ -2900,6 +2978,7 @@ function buildExamSheet(patients, controls, qc, curves) {
   merges.push({ s: {r: isCalValR, c: 13}, e: {r: isCalValR, c: 24} });
   addDetailMerge(isCalValR);
   qcDetailRows.push(isCalValR);
+  qcRowHeightMap[isCalValR] = 18;
 
   rows.push([]); // 빈 구분행
 
@@ -2967,6 +3046,8 @@ function buildExamSheet(patients, controls, qc, curves) {
       isCalLabelRowIdx,
       qcHeaderRowIdx,
       qcDetailRows,
+      qcRowHeightMap,
+      splitDetailRows,
       patHRowIdx,
       patResultRows,
       mrLegendRows,
@@ -3037,8 +3118,11 @@ function resetAll() {
   clearCurveImage();
   document.getElementById('fileLabel').textContent = '';
   document.getElementById('fileInput').value = '';
-  document.getElementById('cfNumerator').value = '0.101';
-  STATE.cfNumerator = 0.101;
+  const cfVal = SETTINGS.cfNumerator ?? 0.101;
+  document.getElementById('cfNumerator').value = cfVal;
+  STATE.cfNumerator = cfVal;
+  const dispEl2 = document.getElementById('cfNumeratorDisplay');
+  if (dispEl2) dispEl2.textContent = cfVal;
   if (window._chart) { window._chart.destroy(); window._chart = null; }
   document.getElementById('qcContent').innerHTML = '<div class="empty">엑셀 파일을 업로드하면 QC 결과가 표시됩니다.</div>';
   document.getElementById('rawContent').innerHTML = '<div class="empty">원시 데이터가 여기에 표시됩니다.</div>';
@@ -3046,6 +3130,12 @@ function resetAll() {
   document.getElementById('reportContent').innerHTML = '<div class="empty">검사결과 보고서가 여기에 표시됩니다.</div>';
   document.getElementById('worklistContent').innerHTML = '<div class="empty">Work List 미리보기가 여기에 표시됩니다.</div>';
 }
+
+// 페이지 로드 시 저장된 cfNumerator 표시
+(function() {
+  const el = document.getElementById('cfNumeratorDisplay');
+  if (el) el.textContent = SETTINGS.cfNumerator ?? 0.101;
+})();
 </script>
 </body>
 </html>
