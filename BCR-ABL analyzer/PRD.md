@@ -1,7 +1,8 @@
 # PRD — BCR-ABL RQ-PCR 분석 시스템
 
-**문서 버전:** 1.0  
+**문서 버전:** 1.1  
 **작성일:** 2026-04-30  
+**최종 수정:** 2026-06-05  
 **작성자:** EJ20179  
 **배포 URL:** https://bcr-abl-pcr-analysis.vercel.app  
 **상태:** 확정
@@ -41,7 +42,7 @@ qPCR 원시 데이터를 업로드하면 BCR-ABL/ABL 정량 분석, QC 판정, I
 | F-12 | NCN 계산 | NCN(%) = (BCR-ABL / ABL) × 100 |
 | F-13 | IS-NCN 계산 | IS-NCN = NCN × CF (보정계수 적용) |
 | F-14 | CF 자동 계산 | IS-CAL NCN 기반 CF = IS-Cal Value / IS-CAL NCN |
-| F-15 | 분자 반응 판정 | CMR / MMR / No MMR 자동 분류 |
+| F-15 | 분자 반응 판정 | Complete / Major / No Major Molecular Response 자동 분류 |
 | F-16 | AMR 판정 | IS-NCN이 정량 신뢰 범위(AMR) 내인지 표시 |
 
 ### 2.3 QC 자동 판정 (9개 항목)
@@ -105,7 +106,7 @@ Cols N~AB : ABL 영역
   - QC 테이블: Criteria / Acceptable values / Result / Detail (4열)
   - AMR IS-NCN 행: Y 레이블 + Z~AB 빨간 굵은 값
   - 환자 결과 테이블: No. / Sample / BCR-ABL1 copy / ABL1 copy / NCN / IS-NCN / Molecular
-    - MR 범례 인라인 (첫 3행: No MMR / MMR / CMR 범위)
+    - MR 범례 인라인 (첫 3행: No Major Molecular Response / Major Molecular Response / Complete Molecular Response 범위)
 ```
 
 #### 셀 스타일 규격
@@ -174,6 +175,15 @@ Cols N~AB : ABL 영역
 | IS-Cal Value 행 | 데이터와 Criteria 사이 추가, W~Y 병합 레이블 |
 | 빈 셀 테두리 | 값 없는 셀 테두리 제거 (환자 MR 범례 4행+, AMR 빈 열) |
 | MR 범례 인라인 | 환자 결과 첫 3행에 MR 판정 기준 인라인 배치 |
+
+### v1.1 (2026-06-05)
+
+| 항목 | 내용 |
+|------|------|
+| MR 전체 명칭 표기 | 모든 화면(배지·복사·Excel)에서 CMR → Complete Molecular Response, MMR → Major Molecular Response, No MMR → No Major Molecular Response로 변경 |
+| Work List MR 표시 위치 | MR 배지를 카드 헤더에서 %IS 행 아래(MR: 행)로 이동 |
+| Work List MR 복사 가능 | MR 배지 클릭 시 전체 명칭 클립보드 복사 지원 |
+| 전체 복사 텍스트 | 📋 전체 버튼 복사 내용에 `MR: <전체 명칭>` 줄 추가 |
 
 ---
 

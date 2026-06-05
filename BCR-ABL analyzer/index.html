@@ -564,6 +564,12 @@ const DEFAULT_SETTINGS = {
 };
 let SETTINGS = loadSettings();
 
+const MR_LABELS = {
+  'CMR':    'Complete Molecular Response',
+  'MMR':    'Major Molecular Response',
+  'No MMR': 'No Major Molecular Response',
+};
+
 function loadSettings() {
   try {
     const s = JSON.parse(localStorage.getItem('bcrabl_settings') || '{}');
@@ -1963,6 +1969,7 @@ function renderPatientTab() {
     const cls = (p.flags.includes('EXPFAIL') || p.ablFail) ? 'row-fail'
               : (p.flags.length ? 'row-warn' : '');
     const mrCls = p.mr === 'CMR' ? 'cmr' : (p.mr === 'MMR' ? 'mmr' : (p.mr === 'No MMR' ? 'nommr' : ''));
+    const mrLabel = MR_LABELS[p.mr] || p.mr;
     const ablCellStyle = p.ablFail ? 'color:var(--danger); font-weight:700;' : '';
     html += `<tr class="${cls}">
       <td>${p.no}</td>
@@ -1971,7 +1978,7 @@ function renderPatientTab() {
       <td class="text-right mono" style="${ablCellStyle}">${p.ablDisplay}${p.ablFail ? ' ⚠' : ''}</td>
       <td class="text-right mono">${p.ncnDisplay}</td>
       <td class="text-right mono"><strong>${p.isNcnDisplay}</strong></td>
-      <td class="text-center"><span class="badge ${mrCls}">${p.mr}</span></td>
+      <td class="text-center"><span class="badge ${mrCls}">${mrLabel}</span></td>
       <td>${p.flags.map(f => `<span class="badge warn">${f}</span>`).join(' ')}</td>
       <td><input type="text" class="prev-study-input" data-sample="${p.name}"
             value="${(STATE.prevStudy[p.name] || '').replace(/"/g,'&quot;')}"
@@ -2019,9 +2026,9 @@ function renderSummaryTab() {
     <div class="stat-card"><div class="label">파일</div><div class="value" style="font-size:14px; word-break:break-all;">${STATE.fileName || '-'}</div><div class="sub">${STATE.metadata?.['Instrument Type'] || ''}</div></div>
     <div class="stat-card"><div class="label">QC 통과</div><div class="value">${passCount}/${qc.length}</div></div>
     <div class="stat-card"><div class="label">환자 샘플</div><div class="value">${patients.length}</div></div>
-    <div class="stat-card"><div class="label">CMR</div><div class="value" style="color:#1e40af">${mrCount.CMR}</div></div>
-    <div class="stat-card"><div class="label">MMR</div><div class="value" style="color:#92400e">${mrCount.MMR}</div></div>
-    <div class="stat-card"><div class="label">No MMR</div><div class="value" style="color:#991b1b">${mrCount['No MMR']}</div></div>
+    <div class="stat-card"><div class="label">Complete Molecular Response</div><div class="value" style="color:#1e40af">${mrCount.CMR}</div></div>
+    <div class="stat-card"><div class="label">Major Molecular Response</div><div class="value" style="color:#92400e">${mrCount.MMR}</div></div>
+    <div class="stat-card"><div class="label">No Major Molecular Response</div><div class="value" style="color:#991b1b">${mrCount['No MMR']}</div></div>
   </div>`;
 
   // 컨트롤 샘플
@@ -2092,7 +2099,7 @@ function renderReportTab() {
       <td class="text-right mono" style="${ablStyle}">${p.ablDisplay}</td>
       <td class="text-right mono">${p.ncnDisplay}</td>
       <td class="text-right mono">${p.isNcnDisplay}</td>
-      <td class="text-center"><span class="badge ${mrCls}">${p.mr}</span></td>
+      <td class="text-center"><span class="badge ${mrCls}">${MR_LABELS[p.mr] || p.mr}</span></td>
     </tr>`;
   }
   html += `</tbody></table>
@@ -2214,9 +2221,13 @@ function renderWorkListPreview(patients) {
     const ncnV = fmtNcn(p);
     const isV  = fmtIs(p);
     // 전체 복사용 텍스트 (라벨 포함, LIS 입력에 적합한 라인 형식)
-    const allText = `${p.name}\nBCR::ABL1: ${bcrV}\nABL1: ${ablV}\nNCN: ${ncnV}\n%IS: ${isV}`;
+    const mrFull = MR_LABELS[p.mr] || p.mr;
+    const allText = `${p.name}\nBCR::ABL1: ${bcrV}\nABL1: ${ablV}\nNCN: ${ncnV}\n%IS: ${isV}\nMR: ${mrFull}`;
     const cell = (val, label) => `<td class="mono copyable no-print" data-copy="${String(val).replace(/"/g,'&quot;')}" title="클릭하여 복사" style="padding:2px 6px; border:none;">${val}</td>`;
     const cellPrint = (val) => `<td class="mono only-print" style="padding:2px 6px; border:none;">${val}</td>`;
+    const mrBadge = `<span class="badge ${mrCls}">${mrFull}</span>`;
+    const mrCell = `<td class="copyable no-print" data-copy="${mrFull}" title="클릭하여 복사" style="padding:2px 6px; border:none;">${mrBadge}</td>`;
+    const mrCellPrint = `<td class="only-print" style="padding:2px 6px; border:none;">${mrBadge}</td>`;
     return `
       <div style="border:1px solid var(--border); border-radius:6px; padding:10px 12px; background:#fafbfc;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;">
@@ -2226,7 +2237,6 @@ function renderWorkListPreview(patients) {
             <span class="mono only-print" style="font-weight:600; margin-left:6px;">${p.name}</span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <span class="badge ${mrCls}">${p.mr}</span>
             <button type="button" class="copy-all-btn no-print" data-copyall="${allText.replace(/"/g,'&quot;').replace(/\n/g,'&#10;')}" title="전체 복사">📋 전체</button>
           </div>
         </div>
@@ -2242,6 +2252,7 @@ function renderWorkListPreview(patients) {
           <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">ABL1:</td>${cell(ablV)}${cellPrint(ablV)}</tr>
           <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">NCN:</td>${cell(ncnV)}${cellPrint(ncnV)}</tr>
           <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">%IS:</td>${cell(isV)}${cellPrint(isV)}</tr>
+          <tr><td style="padding:2px 6px; border:none; color:var(--text-muted);">MR:</td>${mrCell}${mrCellPrint}</tr>
         </table>
       </div>`;
   };
@@ -2349,7 +2360,7 @@ async function downloadExcel() {
     ['AMR IS-NCN', `${SETTINGS.amrMin.toFixed(4)} ~ ${SETTINGS.amrMax.toFixed(4)}`],
     [],
     ['No.','Sample','BCR-ABL1 copy number','ABL1 copy number','NCN','IS-NCN','Molecular'],
-    ...patients.map(p => [p.no, p.name, p.bcrDisplay, p.ablDisplay, p.ncnDisplay, p.isNcnDisplay, p.mr]),
+    ...patients.map(p => [p.no, p.name, p.bcrDisplay, p.ablDisplay, p.ncnDisplay, p.isNcnDisplay, MR_LABELS[p.mr] || p.mr]),
   ];
   const ws1 = XLSX.utils.aoa_to_sheet(reportData);
   XLSX.utils.book_append_sheet(wb, ws1, '검사결과');
@@ -2367,7 +2378,7 @@ async function downloadExcel() {
       p.ablCtSD != null ? +p.ablCtSD.toFixed(3) : null,
       p.ncn != null ? +p.ncn.toFixed(6) : null,
       p.isNcn != null ? +p.isNcn.toFixed(6) : null,
-      p.mr,
+      MR_LABELS[p.mr] || p.mr,
       p.flags.join(', '),
     ])
   ];
@@ -2400,7 +2411,7 @@ async function downloadExcel() {
     p.ablQty != null ? p.ablQty : null,
     p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : (p.ncn != null ? p.ncn : null),
     p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : (p.isNcn != null ? p.isNcn : null),
-    p.mr,
+    MR_LABELS[p.mr] || p.mr,
   ]);
   const ws5 = XLSX.utils.aoa_to_sheet([tableHeaders, ...tableRows]);
   // 셀 포맷: BCR-ABL/ABL = 정수, NCN/IS-NCN = 소수 4자리
@@ -2996,9 +3007,9 @@ function buildExamSheet(patients, controls, qc, curves) {
   // ── 환자 결과 (QC 아래) — ABL 영역(13-27) 내 배치
   // 컬럼: No(13) | Sample(14-17) | BCR-ABL(18-19) | ABL(20-21) | NCN(22) | IS-NCN(23) | Molecular(24=Y) | MR type(25) | MR range(26-27)
   const mrLegend = [
-    ['No MMR', `IS-NCN ≥ ${SETTINGS.mmrCutoff}`],
-    ['MMR', `${SETTINGS.cmrCutoff} ≤ IS-NCN < ${SETTINGS.mmrCutoff}`],
-    ['CMR', `IS-NCN < ${SETTINGS.cmrCutoff}`],
+    ['No Major Molecular Response', `IS-NCN ≥ ${SETTINGS.mmrCutoff}`],
+    ['Major Molecular Response', `${SETTINGS.cmrCutoff} ≤ IS-NCN < ${SETTINGS.mmrCutoff}`],
+    ['Complete Molecular Response', `IS-NCN < ${SETTINGS.cmrCutoff}`],
   ];
 
   const patHRowIdx = rows.length;
@@ -3019,7 +3030,7 @@ function buildExamSheet(patients, controls, qc, curves) {
     const row = new Array(28).fill('');
     row[13] = p.no; row[14] = p.name; row[18] = p.bcrDisplay;
     row[20] = p.ablDisplay; row[22] = p.ncnDisplay;
-    row[23] = p.isNcnDisplay; row[24] = p.mr;
+    row[23] = p.isNcnDisplay; row[24] = MR_LABELS[p.mr] || p.mr;
     if (pi < mrLegend.length) {
       row[25] = mrLegend[pi][0];
       row[26] = mrLegend[pi][1];
