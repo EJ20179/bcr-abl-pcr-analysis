@@ -2,7 +2,7 @@
 
 **문서 버전:** 1.1  
 **작성일:** 2026-04-30  
-**최종 수정:** 2026-06-05  
+**최종 수정:** 2026-06-08  
 **작성자:** EJ20179  
 **배포 URL:** https://bcr-abl-pcr-analysis.vercel.app  
 **상태:** 확정
@@ -139,6 +139,22 @@ Cols N~AB : ABL 영역
 - 날짜별 CF 분자, AMR 범위 이력 테이블 조회
 - 이력 추가·수정·삭제
 
+### 2.9 LIS Export
+
+- **버튼**: 📤 LIS Export (Excel 다운로드 버튼 왼쪽)
+- **출력 파일명**: `LIS_BCR-ABL_YYYYMMDD.xlsx`
+- **시트명**: LIS
+- **컬럼 구조**: 검체번호 / 검사명 / 결과값 (3열)
+- **환자별 5행 고정**:
+
+| 검사명 | 결과값 규칙 |
+|--------|------------|
+| BCR::ABL1 copy number | 정수 / LOD 미만·0이면 `<3` |
+| ABL1 copy number | 정수 |
+| NCN | 소수 4자리 / LOD 미만이면 `<0.0026` |
+| BCR::ABL1 %IS | 소수 4자리 / LOD 미만이면 `<0.0026` |
+| Molecular response | Complete / Major / No Major Molecular Response |
+
 ---
 
 ## 3. 비기능 요구사항
@@ -184,6 +200,14 @@ Cols N~AB : ABL 영역
 | Work List MR 표시 위치 | MR 배지를 카드 헤더에서 %IS 행 아래(MR: 행)로 이동 |
 | Work List MR 복사 가능 | MR 배지 클릭 시 전체 명칭 클립보드 복사 지원 |
 | 전체 복사 텍스트 | 📋 전체 버튼 복사 내용에 `MR: <전체 명칭>` 줄 추가 |
+
+### v1.2 (2026-06-08)
+
+| 항목 | 내용 |
+|------|------|
+| LIS Export 추가 | 자체 LIS import용 Excel 파일 출력 기능 추가 (§2.9) |
+| LIS 파일 구조 | 검체번호 / 검사명 / 결과값 3열, 환자별 5행 고정 |
+| BCR-ABL copy number 0 처리 | 값이 0이거나 LOD 미만이면 `<3` 표기 |
 
 ---
 

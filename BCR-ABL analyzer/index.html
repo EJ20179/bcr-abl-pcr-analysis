@@ -2314,45 +2314,29 @@ function downloadLISExcel() {
   if (!STATE.parsed) { alert('먼저 파일을 업로드해주세요.'); return; }
   const { patients } = STATE.parsed;
 
-  const JOB = 'GA1';
-  const rows = [['검체번호', 'Job', '검사명', '결과수치', '결과문자']];
+  const rows = [['검체번호', '검사명', '결과값']];
 
   for (const p of patients) {
-    // BCR-ABL copy number
-    const bcrNum = (!p.bcrBelowLod && p.bcrQty != null) ? Math.round(p.bcrQty) : null;
-    const bcrTxt = p.bcrBelowLod ? p.bcrDisplay : null;
+    const bcrVal   = (p.bcrBelowLod || !p.bcrQty) ? `<${SETTINGS.bcrLod}` : Math.round(p.bcrQty);
+    const ablVal   = p.ablQty != null ? Math.round(p.ablQty) : null;
+    const ncnVal   = p.ncnBelowLod ? p.ncnDisplay : (p.ncn != null ? +p.ncn.toFixed(4) : null);
+    const isNcnVal = p.isNcnBelowLod ? p.isNcnDisplay : (p.isNcn != null ? +p.isNcn.toFixed(4) : null);
+    const mrFull   = MR_LABELS[p.mr] || p.mr;
 
-    // ABL copy number
-    const ablNum = p.ablQty != null ? Math.round(p.ablQty) : null;
-
-    // NCN
-    const ncnNum = (!p.ncnBelowLod && p.ncn != null) ? +p.ncn.toFixed(4) : null;
-    const ncnTxt = p.ncnBelowLod ? p.ncnDisplay : null;
-
-    // IS-NCN (%IS)
-    const isNcnNum = (!p.isNcnBelowLod && p.isNcn != null) ? +p.isNcn.toFixed(4) : null;
-    const isNcnTxt = p.isNcnBelowLod ? p.isNcnDisplay : null;
-
-    const mrFull = MR_LABELS[p.mr] || p.mr;
-
-    rows.push([p.name, JOB, 'Major BCR::ABL1 rearrangement', null,    '**'    ]);
-    rows.push([p.name, JOB, 'BCR::ABL1 copy number',          bcrNum, bcrTxt  ]);
-    rows.push([p.name, JOB, 'ABL1 copy number',                ablNum, null   ]);
-    rows.push([p.name, JOB, 'NCN',                             ncnNum, ncnTxt ]);
-    rows.push([p.name, JOB, 'BCR::ABL1 %IS',                  isNcnNum, isNcnTxt]);
-    rows.push([p.name, JOB, 'Molecular response',              null,    mrFull ]);
+    rows.push([p.name, 'BCR::ABL1 copy number', bcrVal  ]);
+    rows.push([p.name, 'ABL1 copy number',       ablVal  ]);
+    rows.push([p.name, 'NCN',                    ncnVal  ]);
+    rows.push([p.name, 'BCR::ABL1 %IS',          isNcnVal]);
+    rows.push([p.name, 'Molecular response',     mrFull  ]);
   }
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
-  // 컬럼 너비 설정
   ws['!cols'] = [
     { wch: 20 }, // 검체번호
-    { wch: 6  }, // Job
     { wch: 32 }, // 검사명
-    { wch: 12 }, // 결과수치
-    { wch: 30 }, // 결과문자
+    { wch: 30 }, // 결과값
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'LIS');
