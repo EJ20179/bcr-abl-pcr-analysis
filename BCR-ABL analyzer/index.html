@@ -361,6 +361,13 @@
   .text-right { text-align: right; }
   .text-center { text-align: center; }
   .small { font-size: 11px; color: var(--text-muted); }
+  /* Previous study 보조 입력 UI */
+  .specimen-toggle { display:flex; border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+  .specimen-toggle .stog { padding:4px 10px; border:none; background:white; cursor:pointer; font-size:11px; font-weight:500; color:var(--text-muted); transition:background 0.1s; }
+  .specimen-toggle .stog.active { background:var(--primary); color:white; }
+  .prev-img-drop { display:flex; align-items:center; gap:4px; border:1px dashed var(--border); border-radius:4px; padding:4px 8px; font-size:11px; color:var(--text-muted); cursor:pointer; background:#fafbfc; flex:1; min-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; user-select:none; }
+  .prev-img-drop:hover { border-color:var(--primary); color:var(--primary); }
+  .prev-img-drop:focus { border-color:var(--primary); outline:none; box-shadow:0 0 0 2px rgba(59,130,246,0.25); color:var(--primary); }
 </style>
 </head>
 <body>
@@ -946,7 +953,10 @@ const STATE = {
   parsed: null,     // { samples, standards, ntcs, qc, curve }
   cfNumerator: SETTINGS.cfNumerator ?? 0.101,
   cfApplied: null,  // 실제 적용된 CF
-  prevStudy: {},    // sampleName -> 'Previous study' 메모 (LIS 입력용)
+  prevStudy: {},        // sampleName -> 'Previous study' 메모
+  prevStudyDate: {},    // sampleName -> 'YYYY-MM-DD' (date input 형식)
+  prevStudySpecimen: {},// sampleName -> 'EDTA WB' | 'EDTA BM'
+  prevStudyImages: {},  // sampleName -> dataURL (OCR 원본 이미지)
   curveImage: null, // dataURL — 업로드한 표준곡선 캡쳐 이미지
   curveCropRect: null, // {tx,ty,bx,by} (0~1 비율) — 사용자가 선택한 범례 영역
   swCurve: {        // SW 캡쳐에서 OCR/수동 입력된 값 (있으면 QC에 우선 사용)
@@ -2163,6 +2173,46 @@ function renderWorkListTab() {
       if (await copyToClipboard(text)) flashCopied(btn);
     });
   });
+  // 날짜 picker → STATE 저장
+  document.querySelectorAll('#worklistContent .prev-date-input').forEach(inp => {
+    inp.addEventListener('change', () => { STATE.prevStudyDate[inp.dataset.sample] = inp.value; });
+  });
+  // 검체 종류 토글
+  document.querySelectorAll('#worklistContent .specimen-toggle .stog').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.sample;
+      STATE.prevStudySpecimen[name] = btn.dataset.spec;
+      btn.closest('.specimen-toggle').querySelectorAll('.stog').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  // 이전 결과 이미지 — 전역 paste 리스너 (중복 등록 방지)
+  if (!window._prevStudyPasteListenerAdded) {
+    window._prevStudyPasteListenerAdded = true;
+    document.addEventListener('paste', (e) => {
+      const focused = document.activeElement;
+      if (!focused?.classList.contains('prev-img-drop')) return;
+      const name = focused.dataset.sample;
+      if (!name) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            STATE.prevStudyImages[name] = ev.target.result;
+            document.querySelectorAll('.prev-img-label').forEach(el => {
+              if (el.dataset.sample === name) el.textContent = '✓ 이미지 붙여넣음';
+            });
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    });
+  }
 }
 
 // 클립보드 복사 (HTTPS / localhost 외 환경에서도 fallback)
@@ -2194,6 +2244,106 @@ function flashCopied(el) {
   setTimeout(() => el.classList.remove('copied'), 1200);
 }
 
+// ============================================================
+// Previous study OCR 보조 입력
+// ============================================================
+
+// 검체 ID 앞 6자리 YYMMDD → 'YYYY-MM-DD' (date input 형식), 파싱 불가 시 null
+function sampleIdToDate(name) {
+  const m = String(name).match(/^(\d{2})(\d{2})(\d{2})/);
+  if (!m) return null;
+  const dateStr = `20${m[1]}-${m[2]}-${m[3]}`;
+  return isNaN(new Date(dateStr).getTime()) ? null : dateStr;
+}
+async function runPrevStudyOCR(patNo) {
+  const patients = STATE.parsed?.patients;
+  if (!patients) return;
+  const p = patients.find(x => x.no === patNo);
+  if (!p) return;
+  const name = p.name;
+  const img = STATE.prevStudyImages?.[name];
+  const statusEl = document.getElementById(`prev-ocr-status-${patNo}`);
+
+  if (!img) {
+    if (statusEl) statusEl.textContent = '⚠ 이미지를 먼저 업로드하세요.';
+    return;
+  }
+  const date = STATE.prevStudyDate?.[name] || '';
+  if (!date) {
+    if (statusEl) statusEl.textContent = '⚠ 날짜를 먼저 입력하세요.';
+    return;
+  }
+  const specimen = STATE.prevStudySpecimen?.[name] || 'EDTA WB';
+  if (statusEl) statusEl.textContent = '⏳ OCR 인식 중...';
+
+  try {
+    const processed = await preprocessImageRect(img, 3, null, 150);
+    const dummy = document.createElement('div');
+    const worker = await getOcrWorker(dummy);
+    // 괄호·슬래시 등 특수문자 인식을 위해 화이트리스트 해제
+    await worker.setParameters({ tessedit_char_whitelist: '' });
+    const { data } = await worker.recognize(processed);
+    // 원래 화이트리스트 복원 (표준곡선 OCR용)
+    await worker.setParameters({
+      tessedit_char_whitelist: 'TargetSlopYInerEffR²2BCAabcdefghijklmnopqrstuvwxyz%:.,-_0123456789 ',
+    });
+
+    const prevText = parsePrevStudyFromOCR(data.text, date, specimen);
+    STATE.prevStudy[name] = prevText;
+
+    // textarea 업데이트
+    document.querySelectorAll('#worklistContent .prev-study-input').forEach(el => {
+      if (el.dataset.sample !== name) return;
+      el.value = prevText;
+      const printEl = el.parentElement?.querySelector('.prev-study-print');
+      if (printEl) printEl.textContent = prevText;
+    });
+
+    if (statusEl) statusEl.textContent = prevText
+      ? '✓ 인식 완료 — 아래 내용을 확인·수정 후 사용하세요.'
+      : '⚠ 값을 인식하지 못했습니다. 직접 입력해 주세요.';
+  } catch (err) {
+    console.error('prev study OCR 오류:', err);
+    if (statusEl) statusEl.textContent = '❌ OCR 오류: ' + err.message;
+  }
+}
+
+function parsePrevStudyFromOCR(text, dateInput, specimen) {
+  console.log('[prev study OCR 원문]\n' + text);
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+  // 1. BCR::ABL1 %IS 값 추출 — 줄 단위 검색, LOD 미만(<숫자)도 처리
+  let isVal = null;
+  for (const line of lines) {
+    if (!/%\s*IS/i.test(line)) continue;
+    // BCR/ABL 언급 있는 줄 우선, 없으면 %IS만 있는 줄도 허용
+    const m = line.match(/(<\s*[\d.]+|[\d.]+)\s*$/);
+    if (m) { isVal = m[1].replace(/\s/g, ''); break; }
+  }
+
+  // 2. Molecular response → 약칭 (같은 줄 또는 바로 다음 줄까지 탐색)
+  let mrAbbrev = null;
+  for (let i = 0; i < lines.length; i++) {
+    if (!/molecular\s*response/i.test(lines[i])) continue;
+    // 같은 줄 + 다음 줄을 합쳐서 판단
+    const combined = lines[i] + ' ' + (lines[i + 1] || '');
+    if (/no\s+major/i.test(combined) || /no\s+mmr/i.test(combined)) { mrAbbrev = 'No MMR'; break; }
+    if (/complete/i.test(combined) || /\bcmr\b/i.test(combined))    { mrAbbrev = 'CMR';    break; }
+    if (/major/i.test(combined)    || /\bmmr\b/i.test(combined))    { mrAbbrev = 'MMR';    break; }
+  }
+
+  // 3. 기존 Previous study 항목 추출 (최대 2개) — 괄호 날짜 + EDTA 패턴
+  const prevPattern = /\(\d{4}[.\-]\d{2}[.\-]\d{2}\).{0,5}EDTA[^\n]+/g;
+  const prevLines = [...text.matchAll(prevPattern)].map(m => m[0].trim()).slice(0, 2);
+
+  // 4. 조합
+  const formattedDate = dateInput.replace(/-/g, '.');
+  const out = [];
+  if (isVal) out.push(`(${formattedDate})-${specimen} : ${isVal} / ${mrAbbrev || '?'}`);
+  out.push(...prevLines);
+  return out.join('\n');
+}
+
 function renderWorkListPreview(patients) {
   if (!patients.length) return '<div class="empty">환자 샘플이 없습니다.</div>';
 
@@ -2216,6 +2366,7 @@ function renderWorkListPreview(patients) {
     const note = STATE.prevStudy[p.name] || '';
     const mrCls = p.mr === 'CMR' ? 'cmr' : (p.mr === 'MMR' ? 'mmr' : 'nommr');
     const safeName = p.name.replace(/"/g, '&quot;');
+    const sampleDate = sampleIdToDate(p.name); // 검체 ID YYMMDD → 'YYYY-MM-DD', null이면 제한 없음
     const safeNote = note.replace(/"/g, '&quot;');
     const bcrV = fmtBcr(p);
     const ablV = fmtAbl(p);
@@ -2242,7 +2393,24 @@ function renderWorkListPreview(patients) {
           </div>
         </div>
         <div style="margin-bottom:8px;">
-          <div class="small" style="color:var(--text-muted); margin-bottom:2px;">[Previous study]</div>
+          <div class="small" style="color:var(--text-muted); margin-bottom:4px; font-weight:600;">[Previous study]</div>
+          <div class="no-print" style="display:flex; gap:6px; align-items:center; margin-bottom:4px; flex-wrap:wrap;">
+            <input type="date" class="prev-date-input" data-sample="${safeName}"
+              value="${STATE.prevStudyDate[p.name] || ''}"
+              ${sampleDate ? `max="${sampleDate}"` : ''}
+              style="padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:11px;" />
+            <div class="specimen-toggle">
+              <button type="button" class="stog ${(STATE.prevStudySpecimen[p.name] || 'EDTA WB') === 'EDTA WB' ? 'active' : ''}" data-sample="${safeName}" data-spec="EDTA WB">EDTA WB</button>
+              <button type="button" class="stog ${(STATE.prevStudySpecimen[p.name] || 'EDTA WB') === 'EDTA BM' ? 'active' : ''}" data-sample="${safeName}" data-spec="EDTA BM">EDTA BM</button>
+            </div>
+            <div class="prev-img-drop" tabindex="0" data-sample="${safeName}"
+              title="클릭해서 선택한 뒤 Ctrl+V로 이미지 붙여넣기">
+              <span class="prev-img-label" data-sample="${safeName}">${STATE.prevStudyImages[p.name] ? '✓ 이미지 등록됨' : '📋 클릭 후 Ctrl+V'}</span>
+            </div>
+            <button type="button" class="btn" style="font-size:11px; padding:3px 8px; white-space:nowrap;"
+              onclick="runPrevStudyOCR(${p.no})">🔍 인식</button>
+          </div>
+          <div id="prev-ocr-status-${p.no}" class="small no-print" style="margin-bottom:3px; min-height:14px;"></div>
           <textarea class="prev-study-input no-print" data-sample="${safeName}"
             placeholder="(YYYY.MM.DD)-EDTA WB : ..."
             style="width:100%; min-height:42px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:11px; font-family:inherit; resize:vertical; background:white;">${safeNote}</textarea>
@@ -3165,6 +3333,7 @@ function resetAll() {
   if (!confirm('모든 데이터를 초기화하시겠습니까?')) return;
   STATE.fileName = null; STATE.rawRows = null; STATE.metadata = null;
   STATE.parsed = null; STATE.cfApplied = null; STATE.prevStudy = {};
+  STATE.prevStudyDate = {}; STATE.prevStudySpecimen = {}; STATE.prevStudyImages = {};
   clearCurveImage();
   document.getElementById('fileLabel').textContent = '';
   document.getElementById('fileInput').value = '';

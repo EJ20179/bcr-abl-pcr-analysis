@@ -1,6 +1,6 @@
 # PRD — BCR-ABL RQ-PCR 분석 시스템
 
-**문서 버전:** 1.1  
+**문서 버전:** 1.3  
 **작성일:** 2026-04-30  
 **최종 수정:** 2026-06-08  
 **작성자:** EJ20179  
@@ -19,6 +19,7 @@ qPCR 원시 데이터를 업로드하면 BCR-ABL/ABL 정량 분석, QC 판정, I
 - xlsx-js-style 1.2.0 — Excel 출력 및 셀 스타일
 - JSZip 3.10.1 — xlsx ZIP 조작 (이미지 삽입)
 - Chart.js 4.4.1 — 표준곡선 시각화
+- Tesseract.js — OCR (표준곡선 파라미터·Previous study 결과지 인식)
 
 ---
 
@@ -155,6 +156,30 @@ Cols N~AB : ABL 영역
 | BCR::ABL1 %IS | 소수 4자리 / LOD 미만이면 `<0.0026` |
 | Molecular response | Complete / Major / No Major Molecular Response |
 
+### 2.10 Previous study 보조 입력
+
+Work List 탭의 각 환자 카드에서 직전 보고서 이미지를 붙여넣어 Previous study 텍스트를 자동 생성하는 기능.
+
+| 항목 | 내용 |
+|------|------|
+| 날짜 입력 | 달력 picker (이전 접수 날짜, `YYYY-MM-DD` → `YYYY.MM.DD` 변환) |
+| 날짜 상한 자동 설정 | 검체 ID 앞 6자리(YYMMDD) 파싱 → 해당 날짜를 `max`로 설정, 이후 날짜 선택 불가 |
+| 검체 종류 | EDTA WB (기본값) / EDTA BM 토글 |
+| 이미지 입력 | 영역 클릭 후 Ctrl+V (클립보드 이미지 붙여넣기) |
+| OCR 엔진 | Tesseract.js 재사용 워커, 인식 시 문자 화이트리스트 해제 후 복원 |
+| 추출 항목 | BCR::ABL1 %IS (LOD 미만 `<값` 포함), Molecular response |
+| MR 약칭 변환 | Complete Molecular Response → CMR, Major → MMR, No Major → No MMR |
+| 결과 구성 | 줄1: `(날짜)-{검체} : {%IS} / {약칭}` + 이전 보고서의 Previous study 항목 최대 2줄 |
+| 편집 | OCR 결과를 textarea에 자동 입력 후 수동 수정 가능 |
+| 개인정보 | 환자 정보 상단 제외, 결과표·Remark 영역만 캡쳐하여 사용 권장 |
+
+**Previous study 출력 형식**
+```
+(YYYY.MM.DD)-EDTA WB : 0.7108 / No MMR
+(2026.02.04)-EDTA WB : 0.3021 / No MMR
+(2025.12.12)-EDTA WB : 0.0554 / MMR
+```
+
 ---
 
 ## 3. 비기능 요구사항
@@ -208,6 +233,15 @@ Cols N~AB : ABL 영역
 | LIS Export 추가 | 자체 LIS import용 Excel 파일 출력 기능 추가 (§2.9) |
 | LIS 파일 구조 | 검체번호 / 검사명 / 결과값 3열, 환자별 5행 고정 |
 | BCR-ABL copy number 0 처리 | 값이 0이거나 LOD 미만이면 `<3` 표기 |
+
+### v1.3 (2026-06-08)
+
+| 항목 | 내용 |
+|------|------|
+| Previous study 보조 입력 추가 | Work List 카드에 날짜 picker·검체 종류 토글·이미지 붙여넣기+OCR 기능 추가 (§2.10) |
+| OCR 파싱 개선 | 줄 단위 탐색으로 전환, LOD 미만 값(`<숫자`) 처리, MR이 다음 줄에 오는 경우 대응 |
+| 날짜 상한 자동 설정 | 검체 ID 앞 6자리 YYMMDD 파싱 → 달력 picker max 자동 지정, 이후 날짜 선택 불가 |
+| 기술 스택 추가 | Tesseract.js를 공식 의존 라이브러리로 명시 |
 
 ---
 
