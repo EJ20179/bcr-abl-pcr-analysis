@@ -3034,7 +3034,7 @@ function buildExamSheet(patients, controls, qc, curves) {
       String(r['Target Name']).trim() === target
     );
 
-  const makeRowPair = (bcrSample, ablSample, j, sampleNoL, sampleNoR, isFirstRep) => {
+  const makeRowPair = (bcrSample, ablSample, j, sampleNoL, sampleNoR, isFirstRep, kRatio = 1) => {
     const row = new Array(28).fill('');
     const L = findRows(bcrSample, 'BCR-ABL')[j];
     const R = findRows(ablSample, 'ABL')[j];
@@ -3074,7 +3074,7 @@ function buildExamSheet(patients, controls, qc, curves) {
     if (isFirstRep && R) {
       const LqM = toNum(L?.['Quantity Mean']);
       const RqM = toNum(R?.['Quantity Mean']);
-      const ncnQM = (LqM != null && RqM && RqM > 0) ? (LqM / RqM) * 100 : 0;
+      const ncnQM = (LqM != null && RqM && RqM > 0) ? (LqM / RqM) * 100 * kRatio : 0;
       row[26] = Math.round(ncnQM * 10000) / 10000;
       row[27] = STATE.cfApplied != null ? Math.round(ncnQM * STATE.cfApplied * 10000) / 10000 : 0;
     }
@@ -3096,11 +3096,12 @@ function buildExamSheet(patients, controls, qc, curves) {
 
   // 2) 환자 샘플 — 번호 유지, 첫 replicate만 노란색 대상
   for (const p of patients) {
+    const kRatio = p.kAdjusted ? (p.bcrDetectedReps / p.bcrTotalReps) : 1;
     for (let j = 0; j < 2; j++) {
       const ri = rows.length;
       dataRows.push(ri);
       if (j === 0) patientFirstRepRows.push(ri);
-      rows.push(makeRowPair(p.name, p.name, j, p.no, p.no, j === 0));
+      rows.push(makeRowPair(p.name, p.name, j, p.no, p.no, j === 0, kRatio));
     }
   }
 
