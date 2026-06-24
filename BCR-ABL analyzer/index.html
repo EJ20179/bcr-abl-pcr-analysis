@@ -2354,7 +2354,7 @@ function renderWorkListPreview(patients) {
   const blocks = Math.max(left.length, right.length);
 
   const r4 = (x) => x == null ? '' : Math.round(x * 10000) / 10000;
-  const fmtBcr = (p) => !p ? '' : (p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : (p.bcrQty != null ? r4(p.bcrQty) : ''));
+  const fmtBcr = (p) => !p ? '' : (p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : (p.bcrQty != null ? Math.round(p.bcrQty) : ''));
   const fmtAbl = (p) => !p ? '' : (p.ablQty != null ? Math.round(p.ablQty) : '');  // ABL은 정수
   const fmtNcn = (p) => !p ? '' : (p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : (p.ncn != null ? r4(p.ncn) : ''));
   const fmtIs  = (p) => !p ? '' : (p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : (p.isNcn != null ? r4(p.isNcn) : ''));
@@ -3304,7 +3304,7 @@ function buildWorkListData(patients) {
 
   // WORK LIST는 LIS 복사용 — 소수 4자리로 반올림 (ABL은 정수, 검사결과 보고와 일치)
   const r4 = (x) => x == null ? '' : Math.round(x * 10000) / 10000;
-  const fmtBcr = (p) => p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : r4(p.bcrQty);
+  const fmtBcr = (p) => p.bcrDisplay === `<${SETTINGS.bcrLod}` ? `<${SETTINGS.bcrLod}` : (p.bcrQty != null ? Math.round(p.bcrQty) : '');
   const fmtAbl = (p) => p.ablQty != null ? Math.round(p.ablQty) : '';  // ABL은 정수
   const fmtNcn = (p) => p.ncnBelowLod ? `<${SETTINGS.ncnLod}` : r4(p.ncn);
   const fmtIs  = (p) => p.isNcnBelowLod ? `<${SETTINGS.ncnLod}` : r4(p.isNcn);
