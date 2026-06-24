@@ -2485,7 +2485,7 @@ function downloadLISExcel() {
   const rows = [['검체번호', '검사명', '결과값']];
 
   for (const p of patients) {
-    const bcrVal   = (p.bcrBelowLod || !p.bcrQty) ? `<${SETTINGS.bcrLod}` : Math.round(p.bcrQty);
+    const bcrVal   = (p.bcrDisplay === `<${SETTINGS.bcrLod}`) ? `<${SETTINGS.bcrLod}` : (p.bcrQty != null ? Math.round(p.bcrQty) : null);
     const ablVal   = p.ablQty != null ? Math.round(p.ablQty) : null;
     const ncnVal   = p.ncnBelowLod ? p.ncnDisplay : (p.ncn != null ? +p.ncn.toFixed(4) : null);
     const isNcnVal = p.isNcnBelowLod ? p.isNcnDisplay : (p.isNcn != null ? +p.isNcn.toFixed(4) : null);
