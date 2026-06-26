@@ -2277,7 +2277,7 @@ async function runPrevStudyOCR(patNo) {
   if (statusEl) statusEl.textContent = '⏳ OCR 인식 중...';
 
   try {
-    const processed = await preprocessImageRect(img, 3, null, 150);
+    const processed = await preprocessImageRect(img, 5, null, 150);
     const dummy = document.createElement('div');
     const worker = await getOcrWorker(dummy);
     // 괄호·슬래시 등 특수문자 인식을 위해 화이트리스트 해제
@@ -2310,6 +2310,12 @@ async function runPrevStudyOCR(patNo) {
 
 function parsePrevStudyFromOCR(text, dateInput, specimen) {
   console.log('[prev study OCR 원문]\n' + text);
+  // 알려진 OCR 오인식 교정: WEB→WB, BN→BM 등
+  text = text
+    .replace(/EDTA\s+WEB\b/g, 'EDTA WB')
+    .replace(/EDTA\s+W8\b/g, 'EDTA WB')
+    .replace(/EDTA\s+VVB\b/g, 'EDTA WB')
+    .replace(/EDTA\s+BN\b/g, 'EDTA BM');
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
 
   // 1. BCR::ABL1 %IS 값 추출 — 줄 단위 검색, LOD 미만(<숫자)도 처리
