@@ -1,8 +1,8 @@
 # PRD — BCR-ABL RQ-PCR 분석 시스템
 
-**문서 버전:** 1.3  
+**문서 버전:** 1.4  
 **작성일:** 2026-04-30  
-**최종 수정:** 2026-06-08  
+**최종 수정:** 2026-07-10  
 **작성자:** EJ20179  
 **배포 URL:** https://bcr-abl-pcr-analysis.vercel.app  
 **상태:** 확정
@@ -106,8 +106,8 @@ Cols N~AB : ABL 영역
   - IS-Cal Value 행: W~Y 병합 레이블 + Z~AB 노란 배경 값
   - QC 테이블: Criteria / Acceptable values / Result / Detail (4열)
   - AMR IS-NCN 행: Y 레이블 + Z~AB 빨간 굵은 값
-  - 환자 결과 테이블: No. / Sample / BCR-ABL1 copy / ABL1 copy / NCN / IS-NCN / Molecular
-    - MR 범례 인라인 (첫 3행: No Major Molecular Response / Major Molecular Response / Complete Molecular Response 범위)
+  - 환자 결과 테이블: No. / Sample / BCR-ABL1 copy / ABL1 copy / NCN / IS-NCN / Molecular(약어+글자색)
+    - MR 범례 인라인 (첫 3행: No MMR / MMR / CMR 약어 + 판정 기준 범위, 약어와 동일한 글자색)
 ```
 
 #### 셀 스타일 규격
@@ -123,6 +123,7 @@ Cols N~AB : ABL 영역
 | 환자 헤더 | 회색 배경 (#D9D9D9), 볼드 |
 | QC pass | 녹색 글씨 |
 | QC FAIL | 빨간 글씨, 볼드 |
+| Molecular 결과(검사 시트 Y열)/범례(Z열) | 약어(No MMR/MMR/CMR) 표기, 판정별 글자색: CMR #1E40AF(파랑) / MMR #92400E(갈색) / No MMR #991B1B(빨강). 검사결과·환자결과·표 값·work list 값 등 타 시트 및 화면은 풀네임 유지 |
 
 ### 2.6 표준곡선 이미지 삽입
 
@@ -242,6 +243,13 @@ Work List 탭의 각 환자 카드에서 직전 보고서 이미지를 붙여넣
 | OCR 파싱 개선 | 줄 단위 탐색으로 전환, LOD 미만 값(`<숫자`) 처리, MR이 다음 줄에 오는 경우 대응 |
 | 날짜 상한 자동 설정 | 검체 ID 앞 6자리 YYMMDD 파싱 → 달력 picker max 자동 지정, 이후 날짜 선택 불가 |
 | 기술 스택 추가 | Tesseract.js를 공식 의존 라이브러리로 명시 |
+
+### v1.4 (2026-07-10)
+
+| 항목 | 내용 |
+|------|------|
+| K/2 보정 계산 버그 수정 | Replicate 2개 중 아래 행에만 유효 데이터가 있는 경우, 검사 시트 NCN(Quanti Mean)(AA열)/IS-NCN(AB열)이 0으로 잘못 계산되던 버그 수정. Ct/Quantity 계산 시 이미 K/2 보정을 반영한 환자·컨트롤 결과값(NCN/IS-NCN)을 재사용하도록 변경하여, 위/아래 행 중 어느 쪽에 실제 데이터가 있어도 정확히 계산되어 윗행(첫 replicate)에 기록됨 |
+| 검사 시트 Molecular 표기 변경 | 검사 시트 한정으로 Y열(환자별 Molecular 결과)·Z열(판정 기준 범례)을 약어(No MMR/MMR/CMR)로 표기하고 판정별 글자색(파랑/갈색/빨강) 적용. 검사결과·환자결과·표 값·work list 값 시트 및 화면 UI는 기존 풀네임(Complete/Major/No Major Molecular Response) 표기 유지 |
 
 ---
 

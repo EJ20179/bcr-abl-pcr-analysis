@@ -2867,6 +2867,8 @@ function buildQCItems(qc) {
 function applyExamSheetStyles(ws, styleInfo) {
   const bd = { style: 'thin', color: { rgb: '999999' } };
   const border = { top: bd, bottom: bd, left: bd, right: bd };
+  // 검사 시트 전용 Molecular 약어 글자색 (HTML 배지 색상과 동일)
+  const MR_FONT_COLOR = { CMR: '1E40AF', MMR: '92400E', 'No MMR': '991B1B' };
 
   const setStyle = (r, c, s) => {
     const addr = XLSX.utils.encode_cell({ r, c });
@@ -2974,9 +2976,15 @@ function applyExamSheetStyles(ws, styleInfo) {
   // 환자 데이터 행: cols 13-24 항상 테두리, MR 범례 있는 행(첫 3행)만 25-27 테두리
   const mrLegendRowSet = new Set(styleInfo.mrLegendRows || []);
   for (const ri of styleInfo.patResultRows) {
-    [13, 14, 18, 20, 22, 23, 24].forEach(c => setStyle(ri, c, patD));
+    [13, 14, 18, 20, 22, 23].forEach(c => setStyle(ri, c, patD));
+    const mrAddr = XLSX.utils.encode_cell({ r: ri, c: 24 });
+    const mrColor = MR_FONT_COLOR[ws[mrAddr]?.v];
+    setStyle(ri, 24, mrColor ? { ...patD, font: { bold: true, color: { rgb: mrColor } } } : patD);
     for (let c = 13; c <= 24; c++) addBorder(ri, c);
     if (mrLegendRowSet.has(ri)) {
+      const legAddr = XLSX.utils.encode_cell({ r: ri, c: 25 });
+      const legColor = MR_FONT_COLOR[ws[legAddr]?.v];
+      if (legColor) setStyle(ri, 25, { font: { bold: true, color: { rgb: legColor } }, border });
       for (let c = 25; c <= 27; c++) addBorder(ri, c);
     }
   }
@@ -3039,7 +3047,7 @@ function buildExamSheet(patients, controls, qc, curves) {
       String(r['Target Name']).trim() === target
     );
 
-  const makeRowPair = (bcrSample, ablSample, j, sampleNoL, sampleNoR, isFirstRep, kRatio = 1) => {
+  const makeRowPair = (bcrSample, ablSample, j, sampleNoL, sampleNoR, isFirstRep, precomputed = null) => {
     const row = new Array(28).fill('');
     const L = findRows(bcrSample, 'BCR-ABL')[j];
     const R = findRows(ablSample, 'ABL')[j];
@@ -3077,11 +3085,18 @@ function buildExamSheet(patients, controls, qc, curves) {
     const Rq = toNum(R?.['Quantity']);
     if (R) row[25] = (Lq != null && Rq && Rq > 0) ? Math.round((Lq / Rq) * 100 * 1000) / 1000 : 0;
     if (isFirstRep && R) {
-      const LqM = toNum(L?.['Quantity Mean']);
-      const RqM = toNum(R?.['Quantity Mean']);
-      const ncnQM = (LqM != null && RqM && RqM > 0) ? (LqM / RqM) * 100 * kRatio : 0;
-      row[26] = Math.round(ncnQM * 10000) / 10000;
-      row[27] = STATE.cfApplied != null ? Math.round(ncnQM * STATE.cfApplied * 10000) / 10000 : 0;
+      if (precomputed) {
+        // 두 replicate 중 한쪽에만 데이터가 있어도(K/2 보정 포함) 이미 계산된 값을 그대로 사용 —
+        // 윗행/아랫행 중 어디에 원본 데이터가 있었는지와 무관하게 윗행(첫 replicate)에 기록
+        row[26] = precomputed.ncn   != null ? Math.round(precomputed.ncn   * 10000) / 10000 : 0;
+        row[27] = precomputed.isNcn != null ? Math.round(precomputed.isNcn * 10000) / 10000 : 0;
+      } else {
+        const LqM = toNum(L?.['Quantity Mean']);
+        const RqM = toNum(R?.['Quantity Mean']);
+        const ncnQM = (LqM != null && RqM && RqM > 0) ? (LqM / RqM) * 100 : 0;
+        row[26] = Math.round(ncnQM * 10000) / 10000;
+        row[27] = STATE.cfApplied != null ? Math.round(ncnQM * STATE.cfApplied * 10000) / 10000 : 0;
+      }
     }
     return row;
   };
@@ -3101,12 +3116,11 @@ function buildExamSheet(patients, controls, qc, curves) {
 
   // 2) 환자 샘플 — 번호 유지, 첫 replicate만 노란색 대상
   for (const p of patients) {
-    const kRatio = p.kAdjusted ? (p.bcrDetectedReps / p.bcrTotalReps) : 1;
     for (let j = 0; j < 2; j++) {
       const ri = rows.length;
       dataRows.push(ri);
       if (j === 0) patientFirstRepRows.push(ri);
-      rows.push(makeRowPair(p.name, p.name, j, p.no, p.no, j === 0, kRatio));
+      rows.push(makeRowPair(p.name, p.name, j, p.no, p.no, j === 0, { ncn: p.ncn, isNcn: p.isNcn }));
     }
   }
 
@@ -3123,7 +3137,7 @@ function buildExamSheet(patients, controls, qc, curves) {
         if (cname === 'IS-CAL') isCalNcnRow = ri;
         if (cname === 'HC')     hcIsNcnRow  = ri;
       }
-      rows.push(makeRowPair(c.name, c.name, j, cname, cname, j === 0));
+      rows.push(makeRowPair(c.name, c.name, j, cname, cname, j === 0, { ncn: c.ncn, isNcn: c.isNcn }));
     }
   }
 
@@ -3219,10 +3233,11 @@ function buildExamSheet(patients, controls, qc, curves) {
 
   // ── 환자 결과 (QC 아래) — ABL 영역(13-27) 내 배치
   // 컬럼: No(13) | Sample(14-17) | BCR-ABL(18-19) | ABL(20-21) | NCN(22) | IS-NCN(23) | Molecular(24=Y) | MR type(25) | MR range(26-27)
+  // 검사 시트 전용: Molecular 값/범례는 약어(No MMR/MMR/CMR)로 표기 — 다른 시트/화면은 MR_LABELS 풀네임 유지
   const mrLegend = [
-    ['No Major Molecular Response', `IS-NCN ≥ ${SETTINGS.mmrCutoff}`],
-    ['Major Molecular Response', `${SETTINGS.cmrCutoff} ≤ IS-NCN < ${SETTINGS.mmrCutoff}`],
-    ['Complete Molecular Response', `IS-NCN < ${SETTINGS.cmrCutoff}`],
+    ['No MMR', `IS-NCN ≥ ${SETTINGS.mmrCutoff}`],
+    ['MMR', `${SETTINGS.cmrCutoff} ≤ IS-NCN < ${SETTINGS.mmrCutoff}`],
+    ['CMR', `IS-NCN < ${SETTINGS.cmrCutoff}`],
   ];
 
   const patHRowIdx = rows.length;
@@ -3243,7 +3258,7 @@ function buildExamSheet(patients, controls, qc, curves) {
     const row = new Array(28).fill('');
     row[13] = p.no; row[14] = p.name; row[18] = p.bcrDisplay;
     row[20] = p.ablDisplay; row[22] = p.ncnDisplay;
-    row[23] = p.isNcnDisplay; row[24] = MR_LABELS[p.mr] || p.mr;
+    row[23] = p.isNcnDisplay; row[24] = p.mr; // 검사 시트는 약어 표기(색상으로 구분)
     if (pi < mrLegend.length) {
       row[25] = mrLegend[pi][0];
       row[26] = mrLegend[pi][1];
