@@ -530,8 +530,8 @@
     <div id="calibHistory" style="font-size:11px;"></div>
     <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; margin-top:16px;">
       <div style="display:flex; gap:8px;">
-        <button class="btn" onclick="exportSettings()">⬇ 설정 내보내기</button>
-        <button class="btn" onclick="document.getElementById('importSettingsFile').click()">⬆ 설정 불러오기</button>
+        <button class="btn" onclick="exportSettings()">⬇ 설정+보정이력 내보내기</button>
+        <button class="btn" onclick="document.getElementById('importSettingsFile').click()">⬆ 설정+보정이력 불러오기</button>
         <input type="file" id="importSettingsFile" accept=".json" style="display:none" onchange="importSettings(event)" />
       </div>
       <div style="display:flex; gap:8px;">
@@ -727,9 +727,10 @@ function resetSettings() {
 }
 function exportSettings() {
   const data = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString().slice(0, 10),
     settings: { ...SETTINGS },
+    calibHistory: loadCalibHistory(),
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -748,8 +749,13 @@ function importSettings(event) {
       const imported = parsed.settings || parsed; // version 1 형식 또는 plain 객체 모두 허용
       SETTINGS = { ...DEFAULT_SETTINGS, ...imported };
       localStorage.setItem('bcrabl_settings', JSON.stringify(SETTINGS));
+      if (Array.isArray(parsed.calibHistory)) {
+        saveCalibHistory(parsed.calibHistory);
+      }
       fillSettingsForm();
       STATE.cfNumerator = SETTINGS.cfNumerator ?? 0.101;
+      renderCalibHistory();
+      renderCalibStatus();
       if (STATE.parsed) analyze();
       alert('설정을 성공적으로 불러왔습니다.');
     } catch {
